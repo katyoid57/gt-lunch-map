@@ -1,0 +1,10 @@
+# 認証情報・証明書
+*.pem
+*.crt
+*.key
+.env
+.env.local
+.env.*.local
+
+# ドラフト・作業メモ置き場（コミットしない）
+local/
