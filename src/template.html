@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>市ヶ谷ランチマップ</title>
+<style>
+/* ==== Leaflet CSS（ビルド時に埋め込み） ==== */
+<!--LEAFLET_CSS-->
+/* ==== アプリ CSS ==== */
+:root{
+  --bg:#f5f5f4; --panel:#fff; --line:#e2e2e0; --ink:#222; --muted:#666;
+  --accent:#2563eb; --chip:#eef2ff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif;
+  font-size:14px;line-height:1.5}
+/* 全体：左サイドバー（フィルタ）＋ メイン（地図・一覧）。サイドバーは左へ丸ごと収納できる */
+.app{position:relative;display:flex;height:100vh;overflow:hidden}
+.sidebar{flex:0 0 300px;width:300px;background:var(--panel);border-right:1px solid var(--line);
+  padding:10px 12px;overflow-y:auto;overflow-x:hidden;transition:margin-left .2s ease}
+.app.nav-collapsed .sidebar{margin-left:-300px}
+.side-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+h1{font-size:16px;margin:0}
+.counter{color:var(--muted);font-size:12px;display:block;margin-top:3px}
+.view-toggle{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-top:8px}
+.view-toggle button{border:0;background:#fff;padding:4px 12px;font-size:12px;cursor:pointer}
+.view-toggle button.active{background:var(--accent);color:#fff}
+.view-toggle button:disabled{color:#aaa;cursor:not-allowed;background:#f7f7f6}
+/* インラインの表ビュー（列幅固定・はみ出たら横スクロール） */
+#tableView{display:none;flex:1 1 auto;min-width:0;height:100%;overflow:auto;background:#fff}
+.app.view-table #map,.app.view-table .list-wrap,.app.view-table .list-reopen-btn{display:none}
+.app.view-table #tableView{display:block}
+.tbl-count{color:var(--muted);font-size:12px;padding:8px 10px 6px}
+table.data-tbl{border-collapse:collapse;table-layout:fixed;font-size:13px}
+table.data-tbl th,table.data-tbl td{border:1px solid #e6e6e4;padding:5px 8px;text-align:left;vertical-align:top;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table.data-tbl td.wrap{white-space:normal;word-break:break-word}
+table.data-tbl th{background:#ececeb;position:sticky;top:0;z-index:3;cursor:pointer;user-select:none;box-shadow:inset 0 -1px 0 #ccc}
+table.data-tbl th:hover{background:#e2e2e0}
+table.data-tbl th .arrow{color:#888;font-size:10px;margin-left:2px}
+table.data-tbl td.num,table.data-tbl th.num{text-align:right}
+.data-tbl .maj{display:inline-block;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;white-space:nowrap}
+.data-tbl .unv{color:#b45309;font-size:11px}
+.data-tbl a.g{color:var(--accent);text-decoration:none;white-space:nowrap}
+.icon-btn{background:none;border:1px solid var(--line);border-radius:6px;color:var(--muted);
+  cursor:pointer;font-size:14px;line-height:1;padding:3px 8px}
+.icon-btn:hover{background:var(--chip)}
+.reopen-btn{position:absolute;top:8px;left:8px;z-index:1200;display:none;
+  background:var(--panel);border:1px solid var(--line);border-radius:6px;color:var(--ink);
+  cursor:pointer;font-size:14px;padding:4px 9px;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.app.nav-collapsed .reopen-btn{display:block}
+.controls{display:flex;flex-direction:column;gap:10px;margin-top:10px;align-items:stretch}
+.control-group{display:flex;flex-direction:column;gap:3px;margin-top:12px}
+.control-group>.label{font-size:11px;color:var(--muted);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chips label{display:inline-flex;align-items:center;gap:3px;background:var(--chip);
+  border:1px solid var(--line);border-radius:12px;padding:2px 8px;font-size:12px;cursor:pointer;white-space:nowrap}
+.chips input{margin:0}
+.chips .hint{color:var(--muted);font-size:10px;margin-left:2px}
+/* フィルタ群：見出し＋チップ。見出しクリックでその節を折りたたみ */
+.filter-group{border-top:1px solid var(--line);margin-top:8px;padding-top:6px}
+.fg-head{width:100%;background:none;border:0;padding:0;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:5px}
+.fg-head .chev{font-size:10px;transition:transform .15s ease}
+.filter-group.collapsed .fg-body{display:none}
+.filter-group.collapsed .fg-head .chev{transform:rotate(-90deg)}
+.fg-body{margin-top:6px}
+/* マーカー/ベクタのクリック時の標準フォーカス枠（青点線）を消す */
+.leaflet-marker-icon:focus,.leaflet-interactive:focus{outline:none}
+.radios{display:flex;gap:8px}
+.radios label{display:inline-flex;align-items:center;gap:3px;font-size:12px;cursor:pointer}
+#search{padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;min-width:180px;background:#f2f2f1}
+#search:focus{background:#fff;outline:1px solid var(--accent)}
+.slider-wrap{display:flex;align-items:center;gap:6px;font-size:12px}
+.slider-row{display:flex;align-items:center;gap:6px;font-size:12px;margin:4px 0}
+.slider-row .slabel{flex:0 0 52px;color:var(--muted)}
+.slider-row input[type=range]{flex:1 1 auto;min-width:70px}
+.slider-row .sval{flex:0 0 40px;text-align:right;color:var(--muted)}
+
+/* メイン：地図(左)＋一覧(右)。一覧は右へ丸ごと収納できる */
+.content{flex:1 1 auto;display:flex;min-width:0;height:100vh}
+#map{flex:2 1 0;height:100%;background:#dfe6e9}
+.list-wrap{flex:1 1 0;max-width:420px;height:100%;display:flex;flex-direction:column;
+  background:var(--bg);border-left:1px solid var(--line)}
+.app.list-collapsed .list-wrap{display:none}
+.list-head{display:flex;align-items:center;justify-content:space-between;
+  padding:6px 8px;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;color:var(--muted)}
+#list{flex:1 1 auto;overflow-y:auto;padding:8px}
+.list-reopen-btn{left:auto;right:8px}
+.app.list-collapsed .list-reopen-btn{display:block}
+
+/* タイル切替ボタン（自作。layers.png 非依存） */
+.tile-toggle{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.tile-toggle button{border:0;background:#fff;padding:4px 10px;font-size:12px;cursor:pointer}
+.tile-toggle button.active{background:var(--accent);color:#fff}
+
+/* マーカー（divIcon。marker-icon.png 非依存） */
+.pin{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;color:#fff;line-height:1;
+  border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);background:#888;
+  transition:transform .1s ease, opacity .1s ease}
+.pin.unvisited{border-style:dashed;border-color:#333;opacity:.85}
+.pin.hi{transform:scale(1.45);box-shadow:0 0 0 3px rgba(37,99,235,.6),0 2px 6px rgba(0,0,0,.5)}
+.pin.dim{opacity:.2}
+
+/* リストカード */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer}
+.card:hover{border-color:var(--accent)}
+.card .name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px}
+.card .genre-dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto;border:1px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+.card .meta{color:var(--muted);font-size:12px;margin-top:2px}
+.card .ratings{font-size:12px;margin-top:3px}
+.card .comment{font-size:12px;margin-top:3px}
+.badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;background:#eee;color:#555;margin-left:4px}
+.badge.unvisited{background:#fff3cd;color:#8a6d3b;border:1px solid #f0e0a8}
+.nocoord{font-size:11px;color:#b45309;margin-top:3px}
+.gmaps{display:flex;gap:6px;margin-top:6px}
+.gmaps a{flex:1;text-align:center;text-decoration:none;font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid var(--line);color:var(--accent);background:#fff}
+.gmaps a:hover{background:var(--chip)}
+
+/* ポップアップ内 */
+.popup .pname{font-weight:700;font-size:14px;margin-bottom:2px}
+.popup .prow{font-size:12px;margin:1px 0}
+.popup .gmaps{margin-top:6px}
+
+.legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.legend .item{display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--muted)}
+.legend .dot{width:11px;height:11px;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+
+@media (max-width:760px){
+  .app{flex-direction:column;height:auto;overflow:visible}
+  .sidebar{flex:none;width:auto;max-height:46vh;border-right:0;border-bottom:1px solid var(--line)}
+  .app.nav-collapsed .sidebar{margin-left:0;display:none}
+  .content{flex-direction:column;height:auto}
+  #map{flex:none;height:52vh}
+  .list-wrap{flex:none;max-width:none;height:auto;border-left:0;border-top:1px solid var(--line)}
+  #list{overflow:visible}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="side-head">
+      <h1 id="mapTitle">🍽 市ヶ谷ランチマップ</h1>
+      <button class="icon-btn" id="collapseBtn" type="button" title="フィルタを閉じる" aria-label="フィルタを閉じる">«</button>
+    </div>
+    <div class="view-toggle" id="mapTypeToggle" title="表示するマップ">
+      <button data-map="lunch" class="active" type="button">🍽 ランチ</button>
+      <button data-map="izakaya" type="button">🍶 居酒屋</button>
+    </div>
+    <span class="counter" id="counter"></span>
+    <div class="view-toggle" id="viewToggle">
+      <button data-view="map" class="active" type="button">🗺 地図</button>
+      <button data-view="table" type="button">📋 表</button>
+    </div>
+
+    <div class="control-group">
+      <span class="label">検索（店名・カテゴリ・感想）</span>
+      <input type="text" id="search" placeholder="キーワード…">
+    </div>
+
+    <div class="filter-group" id="fgArea">
+      <button class="fg-head" type="button"><span class="chev">▾</span>地域</button>
+      <div class="fg-body chips" id="areaChips"></div>
+    </div>
+    <div class="filter-group" id="fgGenre">
+      <button class="fg-head" type="button"><span class="chev">▾</span>ジャンル</button>
+      <div class="fg-body chips" id="genreChips"></div>
+    </div>
+
+    <div class="control-group">
+      <span class="label">訪問状態</span>
+      <div class="radios" id="visitRadios">
+        <label><input type="radio" name="visit" value="all" checked>すべて</label>
+        <label><input type="radio" name="visit" value="visited">訪問済</label>
+        <label><input type="radio" name="visit" value="unvisited">未訪問</label>
+      </div>
+    </div>
+    <div class="filter-group" id="fgScore">
+      <button class="fg-head" type="button"><span class="chev">▾</span>評価で絞り込み（各下限）</button>
+      <div class="fg-body" id="scoreSliders"></div>
+    </div>
+  </aside>
+
+  <button class="reopen-btn" id="reopenBtn" type="button" title="フィルタを開く" aria-label="フィルタを開く">»</button>
+
+  <div class="content">
+    <div id="map"></div>
+    <div class="list-wrap" id="listWrap">
+      <div class="list-head"><span>一覧</span>
+        <button class="icon-btn" id="listCollapseBtn" type="button" title="一覧を閉じる" aria-label="一覧を閉じる">»</button>
+      </div>
+      <div id="list"></div>
+    </div>
+    <div id="tableView"></div>
+  </div>
+
+  <button class="reopen-btn list-reopen-btn" id="listReopenBtn" type="button" title="一覧を開く" aria-label="一覧を開く">«</button>
+</div>
+
+<!-- データ：CSV を生テキストのまま埋め込む（JS でパース）。ランチと居酒屋の2データセット -->
+<script id="data" type="text/plain">
+<!--CSV_DATA-->
+</script>
+<script id="data-izakaya" type="text/plain">
+<!--IZAKAYA_DATA-->
+</script>
+
+<!-- Leaflet 本体（ビルド時に埋め込み） -->
+<script>
+<!--LEAFLET_JS-->
+</script>
+
+<script>
+"use strict";
+/* ===== CSV パーサ（引用フィールド "" エスケープ・先頭 BOM 対応） ===== */
+function parseCSV(text){
+  text = text.replace(/^[\s﻿]+/, ""); // 先頭の改行・BOM を除去
+  const rows=[]; let row=[], field="", inQ=false, i=0;
+  while(i < text.length){
+    const c = text[i];
+    if(inQ){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field+='"'; i+=2; continue; }
+        inQ=false; i++; continue;
+      }
+      field += c; i++; continue;
+    } else {
+      if(c === '"'){ inQ=true; i++; continue; }
+      if(c === ','){ row.push(field); field=""; i++; continue; }
+      if(c === '\r'){ i++; continue; }
+      if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=""; i++; continue; }
+      field += c; i++; continue;
+    }
+  }
+  if(field.length>0 || row.length>0){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+function parseDataset(elId, ds){
+  const el = document.getElementById(elId);
+  if(!el) return [];
+  const t = parseCSV(el.textContent).filter(r => r.length>1 && r.some(c => c!==""));
+  if(t.length < 2) return [];
+  const h = t[0];
+  return t.slice(1).map(cols => {
+    const o = {}; h.forEach((hh, i) => { o[hh] = (cols[i] !== undefined ? cols[i] : ""); }); o._dataset = ds; return o;
+  });
+}
+const lunchRecords   = parseDataset("data", "lunch");
+const izakayaRecords = parseDataset("data-izakaya", "izakaya");
+const records = lunchRecords.concat(izakayaRecords);
+const DATASET_TOTAL = { lunch: lunchRecords.length, izakaya: izakayaRecords.length };
+const DATASET_TITLE = { lunch: "🍽 市ヶ谷ランチマップ", izakaya: "🍶 市ヶ谷居酒屋マップ" };
+let activeDataset = "lunch";
+
+/* ===== ジャンル分類 =====
+   大分類は CSV の「大分類」列だけを正とする（未記入は「その他」）。色分け・凡例・フィルタに使用。
+   カテゴリ原文はポップアップ/カードに別途表示。色＋1文字ラベルで区別（白文字が乗るので濃いめの色）。 */
+const OTHER = {g:"その他", label:"他", color:"#64748b"};
+// 大分類はマップ（データセット）ごとに別体系。CSVの「大分類」列の値が下の g と一致すると色が付く。
+const MAJORS_BY_DS = {
+  lunch: [
+    {g:"麺類",             label:"麺", color:"#e11d48"},
+    {g:"肉",               label:"肉", color:"#ea580c"},
+    {g:"魚・海鮮",         label:"魚", color:"#2563eb"},
+    {g:"和食・定食",       label:"和", color:"#16a34a"},
+    {g:"中華",             label:"中", color:"#9333ea"},
+    {g:"エスニック・カレー", label:"エ", color:"#db2777"},
+    {g:"洋食・カフェ",     label:"洋", color:"#0d9488"},
+  ],
+  izakaya: [
+    {g:"焼き鳥・串",       label:"串", color:"#ea580c"},
+    {g:"魚介・海鮮",       label:"魚", color:"#2563eb"},
+    {g:"焼肉・ホルモン",   label:"肉", color:"#b91c1c"},
+    {g:"和食・小料理",     label:"和", color:"#16a34a"},
+    {g:"中華・餃子",       label:"中", color:"#9333ea"},
+    {g:"バル・ワイン",     label:"バ", color:"#0d9488"},
+  ],
+};
+function majorOf(g, ds){ return (MAJORS_BY_DS[ds] || []).find(m => m.g === g) || OTHER; }
+// 大分類は CSV の「大分類」列のみを正とする（カテゴリからの自動判定は行わない）。
+
+/* 各レコードに派生プロパティを付与 */
+records.forEach(r => {
+  const g = (r["大分類"] || "").trim() || "その他"; // 大分類は CSV 列のみ。未記入は「その他」
+  const m = majorOf(g, r._dataset);
+  r._genre = g; r._color = m.color; r._label = m.label;
+  r._visited = (r["訪問済"] === "訪問済");
+  // 総合点 = 美味しさ・量・安さ（値段）の平均。ひとつも無ければ null（未評価）
+  const rv = ["美味しさ", "量", "値段"].map(k => parseInt(r[k], 10)).filter(v => !isNaN(v));
+  r._score = rv.length ? Math.round(rv.reduce((a, b) => a + b, 0) / rv.length * 10) / 10 : null;
+  const lat = parseFloat(r["lat"]), lng = parseFloat(r["lng"]);
+  r._hasCoord = !isNaN(lat) && !isNaN(lng) && r["lat"]!=="" && r["lng"]!=="";
+  r._lat = lat; r._lng = lng;
+});
+// 座標未設定の件数はアクティブなデータセットで数える（render 内で計算）
+
+// 丁目境界ポリゴン（エリア hover 時の縁取り用。国土地理院住所→LOA由来。ビルド時に埋め込み）
+const AREA_POLYGONS =
+<!--AREA_POLYGONS-->
+;
+
+/* ===== Google Maps URL（APIキー不要） ===== */
+function openUrl(r){
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(r["店名"] + " 市ヶ谷");
+}
+
+/* ===== 地図 ===== */
+// 淡色（pale）を既定・唯一のタイルにする（標準はオレンジが強く目に痛いため切替は廃止）
+const GSI_PALE = "https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png";
+const ATTR = '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>';
+
+/* 地図の初期化は try で囲む：万一 Leaflet 未読込やタイル初期化に失敗しても、
+   一覧・絞り込み・検索・Google Maps リンクは動き続ける */
+let map = null, mapReady = false;
+const markers = {};
+try {
+  // 地図の初期中心（このエリアの中心付近に固定）
+  map = L.map("map", {zoomControl:true}).setView([35.68898, 139.734176], 16);
+  L.tileLayer(GSI_PALE, {maxZoom:18, attribution:ATTR}).addTo(map);
+  mapReady = true;
+
+  /* 同一座標に複数店（同ビル、または GSI の番地丸め）がある場合は、
+     小さく円状にずらして重なりを防ぐ（データの lat/lng は真値のまま、表示だけずらす） */
+  (function(){
+    // 「同じ住所（＝同ビル）」の店だけ円状にずらす。近いだけの別ビルは実座標のまま。
+    const groups = {};
+    records.forEach(r => {
+      if(!r._hasCoord) return;
+      const k = r._dataset + "|" + ((r["住所"] || "").trim() || (r._lat.toFixed(6) + "," + r._lng.toFixed(6)));
+      (groups[k] = groups[k] || []).push(r);
+    });
+    Object.keys(groups).forEach(k => {
+      const g = groups[k];
+      if(g.length === 1){ g[0]._dlat = g[0]._lat; g[0]._dlng = g[0]._lng; return; }
+      // クラスタ重心の周りに等間隔リング状で配置（同ビルの複数店がきれいに開く）
+      const clat = g.reduce((s, r) => s + r._lat, 0) / g.length;
+      const clng = g.reduce((s, r) => s + r._lng, 0) / g.length;
+      const R = 0.0002; // 約22m
+      g.forEach((r, i) => {
+        const ang = (2 * Math.PI * i) / g.length - Math.PI / 2;
+        r._dlat = clat + R * Math.sin(ang);
+        r._dlng = clng + R * Math.cos(ang) / Math.cos(clat * Math.PI / 180);
+      });
+    });
+  })();
+
+  /* マーカー（divIcon）を座標のある店にだけ作る */
+  records.forEach(r => {
+    if(!r._hasCoord) return;
+    const html = '<div class="pin' + (r._visited ? "" : " unvisited") + '" style="background:' + r._color + '">' + esc(r._label) + '</div>';
+    const icon = L.divIcon({html, className:"", iconSize:[22,22], iconAnchor:[11,11], popupAnchor:[0,-11]});
+    const m = L.marker([r._dlat, r._dlng], {icon});
+    m.bindPopup(popupHtml(r), {maxWidth:260});
+    markers[r["店舗ID"]] = m;
+  });
+} catch (err) {
+  const mapEl = document.getElementById("map");
+  if (mapEl) mapEl.innerHTML = '<div style="padding:16px;color:#b45309;font-size:13px">'
+    + '地図を初期化できませんでした（' + esc(String((err && err.message) || err)) + '）。<br>'
+    + '一覧・検索・絞り込み・Google Maps リンクはそのままご利用いただけます。</div>';
+  if (window.console) console.error(err);
+}
+
+function popupHtml(r){
+  const parts = [];
+  parts.push('<div class="pname">' + esc(r["店名"]) + (r._visited ? "" : ' <span class="badge unvisited">未訪問</span>') + '</div>');
+  if(r["カテゴリ"]) parts.push('<div class="prow">分類：' + esc(r["カテゴリ"]) + '（' + esc(r._genre) + '）</div>');
+  parts.push('<div class="prow">地域：' + esc(r["地域"]) + '</div>');
+  if(r["場所"]) parts.push('<div class="prow">場所：' + esc(r["場所"]) + '</div>');
+  parts.push(ratingsLine(r));
+  if(r["感想"]) parts.push('<div class="prow">感想：' + esc(r["感想"]) + '</div>');
+  if(r["備考"]) parts.push('<div class="prow">備考：' + esc(r["備考"]) + '</div>');
+  parts.push(gmapsHtml(r));
+  return '<div class="popup">' + parts.join("") + '</div>';
+}
+
+function ratingsLine(r){
+  if(r._score === null) return '';
+  const cell = (label,v) => v ? (label + " " + esc(v) + "/5") : "";
+  const arr = [cell("美味しさ", r["美味しさ"]), cell("量", r["量"]), cell("安さ", r["値段"])].filter(Boolean);
+  return '<div class="prow"><b>総合点 ' + r._score + '/5</b>' + (arr.length ? '（' + arr.join(" ・ ") + '）' : '') + '</div>';
+}
+
+function gmapsHtml(r){
+  return '<div class="gmaps">'
+    + '<a href="' + openUrl(r) + '" target="_blank" rel="noopener">Google Mapsで開く</a>'
+    + '</div>';
+}
+
+function esc(s){
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+/* ===== フィルタ UI 構築 ===== */
+/* チップ hover の強調ロジック（共有） */
+let _outline = null;
+function _clearOutline(){ if(_outline){ map.removeLayer(_outline); _outline = null; } }
+function _setHi(pred){
+  records.forEach(r => {
+    if(!r._hasCoord) return;
+    const m = markers[r["店舗ID"]];
+    const pin = m && m._icon && m._icon.querySelector(".pin");
+    if(!pin) return;
+    pin.classList.remove("hi", "dim");
+    if(!pred) return;
+    pin.classList.add(pred(r) ? "hi" : "dim");
+  });
+}
+function _showOutline(area){
+  _clearOutline();
+  const polys = (typeof AREA_POLYGONS !== "undefined") && AREA_POLYGONS[area];
+  if(!polys || !polys.length) return;
+  _outline = L.polygon(polys.map(ring => [ring]), {
+    color:"#e11d48", weight:2, fill:true, fillColor:"#e11d48", fillOpacity:0.06, interactive:false
+  }).addTo(map);
+}
+
+/* 地域・ジャンルのチップを「表示中のマップ」単位で作り直す（切替のたびに呼ぶ） */
+function buildChips(ds){
+  // 地域
+  const areas = [...new Set(records.filter(r => r._dataset === ds).map(r => r["地域"]))].filter(Boolean);
+  const ac = document.getElementById("areaChips"); ac.innerHTML = "";
+  areas.forEach(v => {
+    const l = document.createElement("label");
+    l.innerHTML = '<input type="checkbox" value="' + esc(v) + '" checked>' + esc(v);
+    ac.appendChild(l);
+  });
+  // ジャンル（大分類）。「その他」は常に選べるよう末尾に必ず出す
+  const order = [...(MAJORS_BY_DS[ds] || []).map(m => m.g), OTHER.g];
+  const genres = order.filter(g => g === OTHER.g || records.some(r => r._dataset === ds && r._genre === g));
+  const gc = document.getElementById("genreChips"); gc.innerHTML = "";
+  genres.forEach(g => {
+    const l = document.createElement("label");
+    l.innerHTML = '<input type="checkbox" value="' + esc(g) + '" checked>'
+      + '<span class="genre-dot" style="width:10px;height:10px;background:' + majorOf(g, ds).color + '"></span>'
+      + esc(g);
+    gc.appendChild(l);
+  });
+  // 新しいチップに hover 強調と change→再描画を付け直す
+  if(mapReady){
+    ac.querySelectorAll("label").forEach(label => {
+      const cb = label.querySelector("input"); if(!cb) return;
+      label.addEventListener("mouseenter", () => { _setHi(r => r["地域"] === cb.value); _showOutline(cb.value); });
+      label.addEventListener("mouseleave", () => { _setHi(null); _clearOutline(); });
+    });
+    gc.querySelectorAll("label").forEach(label => {
+      const cb = label.querySelector("input"); if(!cb) return;
+      label.addEventListener("mouseenter", () => _setHi(r => r._genre === cb.value));
+      label.addEventListener("mouseleave", () => _setHi(null));
+    });
+  }
+  [...ac.querySelectorAll("input"), ...gc.querySelectorAll("input")].forEach(el => el.addEventListener("change", render));
+}
+buildChips(activeDataset);
+
+/* 評価の下限フィルタ（総合点・美味しさ・量・安さ）。各スライダーは 1=すべて */
+function numOf(v){ const n = parseInt(v, 10); return isNaN(n) ? null : n; }
+const SCORE_DEFS = [
+  {key:"score",  label:"総合点",   val:r => r._score},
+  {key:"tasty",  label:"美味しさ", val:r => numOf(r["美味しさ"])},
+  {key:"amount", label:"量",       val:r => numOf(r["量"])},
+  {key:"cost",   label:"安さ",   val:r => numOf(r["値段"])},
+];
+const thresholds = {};
+SCORE_DEFS.forEach(d => { thresholds[d.key] = 1; });
+(function(){
+  const c = document.getElementById("scoreSliders");
+  SCORE_DEFS.forEach(d => {
+    const row = document.createElement("div");
+    row.className = "slider-row";
+    row.innerHTML = '<span class="slabel">' + esc(d.label) + '</span>'
+      + '<input type="range" min="1" max="5" step="1" value="1">'
+      + '<span class="sval">すべて</span>';
+    const input = row.querySelector("input"), out = row.querySelector(".sval");
+    input.addEventListener("input", () => {
+      thresholds[d.key] = parseInt(input.value, 10);
+      out.textContent = input.value === "1" ? "すべて" : (input.value + "↑");
+      render();
+    });
+    c.appendChild(row);
+  });
+})();
+
+function checkedValues(containerId){
+  return [...document.querySelectorAll("#" + containerId + " input:checked")].map(i => i.value);
+}
+
+/* ===== 絞り込み・描画 ===== */
+const listEl = document.getElementById("list");
+const counterEl = document.getElementById("counter");
+const searchEl = document.getElementById("search");
+
+function currentFilter(){
+  return {
+    areas: new Set(checkedValues("areaChips")),
+    genres: new Set(checkedValues("genreChips")),
+    visit: document.querySelector('input[name="visit"]:checked').value,
+    q: searchEl.value.trim().toLowerCase(),
+  };
+}
+
+function passes(r, f){
+  if(r._dataset !== activeDataset) return false;
+  if(!f.areas.has(r["地域"])) return false;
+  if(!f.genres.has(r._genre)) return false;
+  if(f.visit === "visited" && !r._visited) return false;
+  if(f.visit === "unvisited" && r._visited) return false;
+  for(const d of SCORE_DEFS){
+    const t = thresholds[d.key];
+    if(t > 1){ const v = d.val(r); if(v === null || v < t) return false; }
+  }
+  if(f.q){
+    const hay = (r["店名"] + " " + r["カテゴリ"] + " " + r["感想"]).toLowerCase();
+    if(hay.indexOf(f.q) === -1) return false;
+  }
+  return true;
+}
+
+function sortForList(a, b){
+  const da = a._score === null ? -1 : a._score;
+  const db = b._score === null ? -1 : b._score;
+  if(db !== da) return db - da;
+  return a["店名"].localeCompare(b["店名"], "ja");
+}
+
+let currentVisible = [];
+function render(){
+  const f = currentFilter();
+  const visible = records.filter(r => passes(r, f));
+
+  // マーカー表示/非表示（地図が使えるときだけ）
+  if(mapReady){
+    records.forEach(r => {
+      const m = markers[r["店舗ID"]];
+      if(!m) return;
+      if(passes(r, f)){ if(!map.hasLayer(m)) m.addTo(map); }
+      else { if(map.hasLayer(m)) map.removeLayer(m); }
+    });
+  }
+
+  // 一覧
+  listEl.innerHTML = "";
+  visible.slice().sort(sortForList).forEach(r => {
+    const card = document.createElement("div");
+    card.className = "card";
+    let html = '<div class="name"><span class="genre-dot" style="background:' + r._color + '"></span>'
+      + esc(r["店名"]) + (r._visited ? "" : '<span class="badge unvisited">未訪問</span>') + '</div>';
+    html += '<div class="meta">' + esc(r._genre) + '（' + esc(r["カテゴリ"] || "分類なし") + '）・' + esc(r["地域"]);
+    if(r["場所"]) html += '・' + esc(r["場所"]);
+    html += '</div>';
+    const rl = ratingsLine(r);
+    if(rl) html += rl.replace("prow", "ratings");
+    if(r["感想"]) html += '<div class="comment">' + esc(r["感想"]) + '</div>';
+    if(!r._hasCoord) html += '<div class="nocoord">📍 地図に未掲載（座標未設定）</div>';
+    html += gmapsHtml(r);
+    card.innerHTML = html;
+
+    // カードクリック→地図パン＆ポップアップ（座標がある場合）
+    card.addEventListener("click", e => {
+      if(e.target.closest("a")) return; // リンクは通常遷移
+      const m = markers[r["店舗ID"]];
+      if(mapReady && m && map.hasLayer(m)){
+        map.setView([r._lat, r._lng], Math.max(map.getZoom(), 17));
+        m.openPopup();
+      }
+    });
+    listEl.appendChild(card);
+  });
+
+  const nocoord = records.filter(r => r._dataset === activeDataset && !r._hasCoord).length;
+  counterEl.textContent = "表示中 " + visible.length + " / " + DATASET_TOTAL[activeDataset] + " 件 ・ 座標未設定 " + nocoord + " 件";
+
+  // 表ビューにも同じ絞り込み結果を反映
+  currentVisible = visible;
+  if(appEl.classList.contains("view-table")) renderTable();
+}
+
+/* イベント */
+document.querySelectorAll("#visitRadios input").forEach(el => el.addEventListener("change", render));
+searchEl.addEventListener("input", render);
+
+/* フィルタ群（節）の折りたたみ */
+document.querySelectorAll(".fg-head").forEach(h => h.addEventListener("click", () => h.parentElement.classList.toggle("collapsed")));
+
+/* サイドバーごと左へ収納／展開（Notion/Linear 風）。地図のサイズが変わるので invalidateSize */
+const appEl = document.getElementById("app");
+function setNav(collapsed){
+  appEl.classList.toggle("nav-collapsed", collapsed);
+  if(mapReady) setTimeout(() => map.invalidateSize(), 210);
+}
+document.getElementById("collapseBtn").addEventListener("click", () => setNav(true));
+document.getElementById("reopenBtn").addEventListener("click", () => setNav(false));
+
+/* 一覧（右）を丸ごと右へ収納／展開 */
+function setList(collapsed){
+  appEl.classList.toggle("list-collapsed", collapsed);
+  if(mapReady) setTimeout(() => map.invalidateSize(), 210);
+}
+document.getElementById("listCollapseBtn").addEventListener("click", () => setList(true));
+document.getElementById("listReopenBtn").addEventListener("click", () => setList(false));
+
+/* ===== 表ビュー（同ページ内。絞り込み結果を表示、列見出しで並び替え） ===== */
+const TBL_COLS = [
+  {k:"店名",   label:"店名",   type:"str", w:170, get:r => esc(r["店名"]) + (r._visited ? "" : ' <span class="unv">未訪問</span>'), val:r => r["店名"]},
+  {k:"大分類", label:"大分類", type:"str", w:120, get:r => '<span class="maj" style="background:' + r._color + '">' + esc(r._genre) + '</span>', val:r => r._genre},
+  {k:"地域",   label:"地域",   type:"str", w:80,  get:r => esc(r["地域"]), val:r => r["地域"]},
+  {k:"score",  label:"総合点", type:"num", w:76, get:r => r._score !== null ? r._score : "—", val:r => r._score},
+  {k:"tasty",  label:"美味しさ", type:"num", w:76, get:r => r["美味しさ"] || "—", val:r => numOf(r["美味しさ"])},
+  {k:"amount", label:"量",     type:"num", w:76, get:r => r["量"] || "—", val:r => numOf(r["量"])},
+  {k:"cost",   label:"安さ", type:"num", w:76, get:r => r["値段"] || "—", val:r => numOf(r["値段"])},
+  {k:"感想",   label:"感想",   type:"str", w:280, cls:"wrap", get:r => esc(r["感想"] || ""), val:r => r["感想"] || ""},
+  {k:"備考",   label:"備考",   type:"str", w:180, cls:"wrap", get:r => esc(r["備考"] || ""), val:r => r["備考"] || ""},
+  {k:"map",    label:"地図",   type:"str", w:110, get:r => '<a class="g" href="' + openUrl(r) + '" target="_blank" rel="noopener">Google Maps</a>', val:r => ""},
+];
+let tblSortKey = "score", tblSortDir = -1;
+function renderTable(){
+  const host = document.getElementById("tableView");
+  const col = TBL_COLS.find(c => c.k === tblSortKey);
+  const rows = currentVisible.slice().sort((a, b) => {
+    if(col.type === "num"){
+      const va = col.val(a), vb = col.val(b);
+      return ((va === null ? -Infinity : va) - (vb === null ? -Infinity : vb)) * tblSortDir;
+    }
+    return String(col.val(a) || "").localeCompare(String(col.val(b) || ""), "ja") * tblSortDir;
+  });
+  const colgroup = "<colgroup>" + TBL_COLS.map(c => '<col style="width:' + c.w + 'px">').join("") + "</colgroup>";
+  const thClass = c => (c.type === "num" ? "num" : "");
+  const tdClass = c => [c.type === "num" ? "num" : "", c.cls || ""].filter(Boolean).join(" ");
+  const thead = "<tr>" + TBL_COLS.map(c => {
+    const ar = c.k === tblSortKey ? (tblSortDir < 0 ? "▼" : "▲") : "";
+    return '<th class="' + thClass(c) + '" data-k="' + c.k + '">' + esc(c.label) + '<span class="arrow">' + ar + '</span></th>';
+  }).join("") + "</tr>";
+  const tbody = rows.map(r => "<tr>" + TBL_COLS.map(c => '<td class="' + tdClass(c) + '">' + c.get(r) + "</td>").join("") + "</tr>").join("");
+  host.innerHTML = '<div class="tbl-count">表示 ' + rows.length + ' / ' + DATASET_TOTAL[activeDataset] + ' 件（列見出しで並び替え）</div>'
+    + '<table class="data-tbl" style="width:100%;min-width:900px">' + colgroup + '<thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
+  host.querySelectorAll("th").forEach(th => th.addEventListener("click", () => {
+    const k = th.dataset.k;
+    if(k === tblSortKey){ tblSortDir = -tblSortDir; }
+    else { tblSortKey = k; tblSortDir = (TBL_COLS.find(c => c.k === k).type === "num") ? -1 : 1; }
+    renderTable();
+  }));
+}
+document.querySelectorAll("#viewToggle button").forEach(b => b.addEventListener("click", () => {
+  const v = b.dataset.view;
+  document.querySelectorAll("#viewToggle button").forEach(x => x.classList.toggle("active", x === b));
+  appEl.classList.toggle("view-table", v === "table");
+  if(v === "table") renderTable();
+  else if(mapReady) setTimeout(() => map.invalidateSize(), 50);
+}));
+
+/* マップ種別の切替（ランチ ⇄ 居酒屋）。データセットを差し替えて地図・一覧・表・件数を更新 */
+document.querySelectorAll("#mapTypeToggle button").forEach(b => b.addEventListener("click", () => {
+  const d = b.dataset.map;
+  if(d === activeDataset) return;
+  activeDataset = d;
+  document.querySelectorAll("#mapTypeToggle button").forEach(x => x.classList.toggle("active", x === b));
+  document.getElementById("mapTitle").textContent = DATASET_TITLE[d];
+  buildChips(activeDataset);
+  render();
+  if(mapReady){
+    const pts = records.filter(r => r._dataset === activeDataset && r._hasCoord).map(r => [r._dlat, r._dlng]);
+    if(pts.length) map.fitBounds(pts, {padding:[50, 50], maxZoom:17});
+  }
+}));
+
+render();
+</script>
+</body>
+</html>
