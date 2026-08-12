@@ -669,133 +669,308 @@ svg.leaflet-image-layer.leaflet-interactive path {
 		}
 	}
 /* ==== アプリ CSS ==== */
+/* 色の方針（2026-08-12 の配色精査より）
+   - UI は**ダーク**、地図は明るい（地理院タイルは淡色しか無いので地図面は常にライト）。
+     この「暗いUIの中に明るい地図がある」構造のせいで、色トークンは2系統に分かれる：
+       * UI 側 … --surface-* / --ink / --brand など。ダーク前提。
+       * 地図の上に載るもの … --on-map-ink。**ライト面に対して**成立させる必要がある。
+     ピンの強調リングやエリア枠に UI 側の色を使うと明るい地図の上で消えるので必ず --on-map-* を使う。
+     ポップアップは「地図の上に浮く UI パネル」として扱うのでダーク（明るい地図に対し 13.7:1 で浮く）。
+   - 色は「役割ごとに1つ」に予約して使い回さない。混ぜると強調が効かなくなる：
+       * --brand  緑（エメラルド） … 選択中・操作できる（UI 専用。データにも地図にも使わない）
+       * --warn   金     … 注意・未訪問
+       * --on-map-mark 赤 … 地図上のエリア境界
+       * MAJORS_BY_DS の7色 … 大分類（データ）
+     brand 緑は7色から 通常視 27.3 / CVD 17.1、warn 金は 29.1 / 27.4 離れている。 */
 :root{
-  --bg:#f5f5f4; --panel:#fff; --line:#e2e2e0; --ink:#222; --muted:#666;
-  --accent:#2563eb; --chip:#eef2ff;
+  color-scheme:dark;     /* チェックボックス・スクロールバー等をダーク既定にする */
+  --surface-0:#212120;   /* パネル・カード・ツールバー・表の地 */
+  --surface-1:#171716;   /* ページ地・一覧の地（一段暗い） */
+  --surface-2:#2e2e2b;   /* 表ヘッダ・入力欄・面を一段起こしたい所 */
+  --line:#4f4f47;
+  --ink:#ebebe6;         /* 本文（パネル地に対し 13.5:1） */
+  --muted:#a1a19a;       /* 補助テキスト（同 6.2:1） */
+  --faint:#55554f;       /* 評価ドットの未点灯など「形はあるが情報でない」もの */
+  --surface-pop:#232322; /* ポップアップ面。パネルより一段上に浮くので少し明るい */
+  --panel-w:320px;       /* 左（フィルタ）と右（一覧）の収納パネルの幅。左右で同じにする */
+  /* ブランド色＝「選択中／操作できる」を示す1色。UI 専用に予約する。
+     色相 163°（エメラルド）。大分類の7色・警告の金・エリア枠のシアンに対し
+     最小 通常視 ΔE 27.3 / CVD 17.1（要 15 / 6）で離れている。和食の緑とは色相が近いが ΔE 27 以上あり、
+     かつ「塗りの丸」と「枠・下線」で形が違うので取り違えない。
+     ★ 使ってよい所: ダーク面の上（パネル比 8.4:1）。選択中のタブ下線・ビュー切替・フォーカス・hover 枠。
+     ★ 使ってはいけない所:
+       1) 地図の上（淡色タイルに対し 1.7:1 で埋もれる）→ ピンの強調リングは --on-map-ink のまま
+       2) 8個目の大分類の色（データの色として使うと予約が崩れる）
+       3) 警告の役割（金 --warn=注意/未訪問、緑=操作可能。役割を混ぜない）
+     ポップアップもダーク面にしたので、そこでも同じ --brand をそのまま使える。 */
+  --brand:#34d399;
+  --brand-ink:#0f1720;   /* --brand を塗りにしたときの文字色（9.99:1） */
+  --chip:#2b2b28;
+  --warn:#fbbf24;
+  --warn-bg:#3a2c08;
+  --warn-line:#6b5214;
+  --on-map-ink:#1f2937;  /* 地図（ライト面）の上に置く線・リング用（強調リング等） */
+  /* エリア境界。「今どこを見ているか」を一目で示す役割なので赤。
+     大分類が赤系を2つ持つ（中華=濃赤 / 肉=明赤）ため、数値だけ見ると肉と 通常視 ΔE 7.7・
+     カレーと CVD 3.5 と近い。**これは検討のうえで許容している**：
+     ΔE の閾値は「同じ形のマークが隣り合う場合」に対して校正された基準で、ここは
+     破線の境界＋面の淡い塗り（線）vs 文字入りの塗りの丸（点）で形と役割が違うため、
+     実際の画面では取り違えない（2026-08-12 に実機で確認）。
+     ★もし将来ここを混同するようになったら、赤を動かすのではなく肉の色を動かす方が筋が良い
+       （赤の代替はシアン #0891b2 = 7色から 通常視 14.7 / CVD 12.7 が測定済みの候補）。 */
+  --on-map-mark:#dc2626;
+  accent-color:var(--brand);
+  /* 面の起伏（グラデーション＋影）。ダークUIでは「上から光が当たる」向きの白の薄い重ねで面を起こす。
+     ★データの色（ピン・大分類バッジ・表のチップ）には絶対に掛けない：
+       グラデーションを掛けると見えの色がずれて、検証済みのパレットが成立しなくなる。
+       起伏はクローム（パネル・ボタン・カード）だけの担当。 */
+  --elev-1:linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.025) 55%,rgba(255,255,255,0));
+  --elev-2:linear-gradient(160deg,rgba(255,255,255,.17),rgba(255,255,255,.05) 55%,rgba(255,255,255,0));
+  --edge-top:inset 0 1px 0 rgba(255,255,255,.13);
+  --shadow-1:0 1px 2px rgba(0,0,0,.5),0 7px 18px rgba(0,0,0,.32);
+  --shadow-2:0 2px 7px rgba(0,0,0,.55),0 16px 34px rgba(0,0,0,.45);
+  --sunken:inset 0 2px 4px rgba(0,0,0,.5);
 }
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--ink);
+html,body{margin:0;padding:0;height:100%;background-color:var(--surface-1);color:var(--ink);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif;
   font-size:14px;line-height:1.5}
-/* 全体：左サイドバー（フィルタ）＋ メイン（地図・一覧）。サイドバーは左へ丸ごと収納できる */
+/* 地の平坦さを消すための、ごく薄い光源。左上から当たっている前提を全体で揃える */
+body{background-image:radial-gradient(1100px 620px at 18% -12%,rgba(255,255,255,.055),transparent 62%)}
+/* フォーカスはキーボード操作時だけ出す（マウスクリックでは出さない） */
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+/* 全体：左サイドバー（フィルタ）＋ メイン（ツールバー・地図/表・一覧）。サイドバーは左へ丸ごと収納できる */
 .app{position:relative;display:flex;height:100vh;overflow:hidden}
-.sidebar{flex:0 0 300px;width:300px;background:var(--panel);border-right:1px solid var(--line);
-  padding:10px 12px;overflow-y:auto;overflow-x:hidden;transition:margin-left .2s ease}
-.app.nav-collapsed .sidebar{margin-left:-300px}
+/* 左右の収納パネルは同じ幅（--panel-w）にする。片方 300px 固定・もう片方 320〜420px 可変だと、
+   畳む場所が左右で違う幅になって落ち着かない。 */
+.sidebar{flex:0 0 var(--panel-w);width:var(--panel-w);border-right:1px solid var(--line);
+  background-color:var(--surface-0);background-image:var(--elev-1);background-repeat:no-repeat;
+  padding:10px 12px;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;transition:margin-left .2s ease}
+.app.nav-collapsed .sidebar{margin-left:calc(-1 * var(--panel-w))}
 .side-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 h1{font-size:16px;margin:0}
-.counter{color:var(--muted);font-size:12px;display:block;margin-top:3px}
-.view-toggle{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-top:8px}
-.view-toggle button{border:0;background:#fff;padding:4px 12px;font-size:12px;cursor:pointer}
-.view-toggle button.active{background:var(--accent);color:#fff}
-.view-toggle button:disabled{color:#aaa;cursor:not-allowed;background:#f7f7f6}
-/* インラインの表ビュー（列幅固定・はみ出たら横スクロール） */
-#tableView{display:none;flex:1 1 auto;min-width:0;height:100%;overflow:auto;background:#fff}
-.app.view-table #map,.app.view-table .list-wrap,.app.view-table .list-reopen-btn{display:none}
-.app.view-table #tableView{display:block}
-.tbl-count{color:var(--muted);font-size:12px;padding:8px 10px 6px}
-table.data-tbl{border-collapse:collapse;table-layout:fixed;font-size:13px}
-table.data-tbl th,table.data-tbl td{border:1px solid #e6e6e4;padding:5px 8px;text-align:left;vertical-align:top;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-table.data-tbl td.wrap{white-space:normal;word-break:break-word}
-table.data-tbl th{background:#ececeb;position:sticky;top:0;z-index:3;cursor:pointer;user-select:none;box-shadow:inset 0 -1px 0 #ccc}
-table.data-tbl th:hover{background:#e2e2e0}
-table.data-tbl th .arrow{color:#888;font-size:10px;margin-left:2px}
-table.data-tbl td.num,table.data-tbl th.num{text-align:right}
-.data-tbl .maj{display:inline-block;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;white-space:nowrap}
-.data-tbl .unv{color:#b45309;font-size:11px}
-.data-tbl a.g{color:var(--accent);text-decoration:none;white-space:nowrap}
-.icon-btn{background:none;border:1px solid var(--line);border-radius:6px;color:var(--muted);
-  cursor:pointer;font-size:14px;line-height:1;padding:3px 8px}
-.icon-btn:hover{background:var(--chip)}
-.reopen-btn{position:absolute;top:8px;left:8px;z-index:1200;display:none;
-  background:var(--panel);border:1px solid var(--line);border-radius:6px;color:var(--ink);
-  cursor:pointer;font-size:14px;padding:4px 9px;box-shadow:0 1px 4px rgba(0,0,0,.25)}
-.app.nav-collapsed .reopen-btn{display:block}
-.controls{display:flex;flex-direction:column;gap:10px;margin-top:10px;align-items:stretch}
-.control-group{display:flex;flex-direction:column;gap:3px;margin-top:12px}
-.control-group>.label{font-size:11px;color:var(--muted);font-weight:600}
-.chips{display:flex;flex-wrap:wrap;gap:4px}
-.chips label{display:inline-flex;align-items:center;gap:3px;background:var(--chip);
-  border:1px solid var(--line);border-radius:12px;padding:2px 8px;font-size:12px;cursor:pointer;white-space:nowrap}
-.chips input{margin:0}
-.chips .hint{color:var(--muted);font-size:10px;margin-left:2px}
-/* フィルタ群：見出し＋チップ。見出しクリックでその節を折りたたみ */
-.filter-group{border-top:1px solid var(--line);margin-top:8px;padding-top:6px}
-.fg-head{width:100%;background:none;border:0;padding:0;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:5px}
+/* データセット切替は「このページの主題」なので、ビュー切替と同じ形にせずタブにする */
+.ds-tabs{display:flex;margin-top:10px;border-bottom:1px solid var(--line)}
+.ds-tabs button{flex:1 1 0;border:0;background:none;padding:7px 4px;font-size:13px;font-weight:600;
+  color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.ds-tabs button.active{color:var(--ink);border-bottom-color:var(--brand);
+  background-image:linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,0))}
+.ds-tabs button:hover:not(.active){color:var(--ink);background-color:var(--surface-2)}
+/* 検索はサイドバーを下までスクロールしても残す。スクロール時に下へ影が落ちて手前にいると分かる */
+.side-search{position:sticky;top:0;z-index:5;background-color:var(--surface-0);background-image:var(--elev-1);
+  margin:0 -12px;padding:9px 12px;border-bottom:1px solid var(--line);
+  box-shadow:0 8px 14px -10px rgba(0,0,0,.8)}
+/* 入力欄は「押し込まれた面」＝ボタンの逆。押せるものと書けるものを起伏で分ける */
+#search{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:13px;
+  background-color:var(--surface-2);color:var(--ink);box-shadow:var(--sunken)}
+#search::placeholder{color:var(--muted)}
+/* 入力中はブランド色の枠＋淡いにじみで「ここに入っている」を示す */
+#search:focus{border-color:var(--brand);outline:none;
+  box-shadow:var(--sunken),0 0 0 3px rgba(52,211,153,.18)}
+/* 4つある収納ボタン（左を閉じる・開く / 右を閉じる・開く）が同じ大きさになるよう寸法を固定する */
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;min-width:32px;
+  border:1px solid var(--line);border-radius:7px;color:var(--muted);
+  background-color:var(--surface-2);background-image:var(--elev-1);
+  box-shadow:var(--edge-top),0 1px 2px rgba(0,0,0,.35);
+  cursor:pointer;font-size:14px;line-height:1;padding:4px 9px;
+  transition:background-image .12s ease,border-color .12s ease,color .12s ease}
+.icon-btn:hover{background-image:var(--elev-2);color:var(--ink);border-color:var(--brand)}
+.icon-btn:active{background-image:none;box-shadow:var(--sunken)}
+/* フィルタ群：見出し＋中身。見出しクリックでその節を折りたたみ（5節すべて同じ形） */
+.filter-group{border-top:1px solid var(--line);margin-top:10px;padding-top:8px}
+.fg-head{width:100%;background:none;border:0;padding:0;font-size:12px;font-weight:700;color:var(--muted);
+  cursor:pointer;display:flex;align-items:center;gap:5px}
+.fg-head:hover{color:var(--ink)}
 .fg-head .chev{font-size:10px;transition:transform .15s ease}
 .filter-group.collapsed .fg-body{display:none}
 .filter-group.collapsed .fg-head .chev{transform:rotate(-90deg)}
-.fg-body{margin-top:6px}
-/* マーカー/ベクタのクリック時の標準フォーカス枠（青点線）を消す */
-.leaflet-marker-icon:focus,.leaflet-interactive:focus{outline:none}
-.radios{display:flex;gap:8px}
-.radios label{display:inline-flex;align-items:center;gap:3px;font-size:12px;cursor:pointer}
-#search{padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;min-width:180px;background:#f2f2f1}
-#search:focus{background:#fff;outline:1px solid var(--accent)}
-.slider-wrap{display:flex;align-items:center;gap:6px;font-size:12px}
-.slider-row{display:flex;align-items:center;gap:6px;font-size:12px;margin:4px 0}
-.slider-row .slabel{flex:0 0 52px;color:var(--muted)}
-.slider-row input[type=range]{flex:1 1 auto;min-width:70px}
-.slider-row .sval{flex:0 0 40px;text-align:right;color:var(--muted)}
+.fg-body{margin-top:7px}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chips label{display:inline-flex;align-items:center;gap:4px;
+  background-color:var(--chip);background-image:var(--elev-1);
+  box-shadow:var(--edge-top),0 1px 1px rgba(0,0,0,.28);
+  border:1px solid var(--line);border-radius:13px;padding:3px 9px 3px 6px;font-size:12px;cursor:pointer;
+  white-space:nowrap;transition:background-image .12s ease,border-color .12s ease}
+.chips label:hover{border-color:var(--brand);background-image:var(--elev-2)}
+.chips input{margin:0}
+.radios{display:flex;gap:10px}
+.radios label{display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer}
+.slider-row{display:flex;align-items:center;gap:6px;font-size:12px;margin:5px 0}
+.slider-row .slabel{flex:0 0 56px;color:var(--muted)}
+.slider-row input[type=range]{flex:1 1 auto;min-width:70px;accent-color:var(--brand)}
+.slider-row .sval{flex:0 0 42px;text-align:right;color:var(--muted)}
+.side-note{margin:10px 0 0;font-size:12px;color:var(--warn)}
 
-/* メイン：地図(左)＋一覧(右)。一覧は右へ丸ごと収納できる */
+/* メイン：ツールバー（上）＋ 地図または表（下）。右に一覧。一覧は右へ丸ごと収納できる */
 .content{flex:1 1 auto;display:flex;min-width:0;height:100vh}
-#map{flex:2 1 0;height:100%;background:#dfe6e9}
-.list-wrap{flex:1 1 0;max-width:420px;height:100%;display:flex;flex-direction:column;
-  background:var(--bg);border-left:1px solid var(--line)}
+/* 地図側には min-width を持たせて、一覧に幅を奪われて潰れないようにする。
+   サイドバー(300px 固定)は縮まないので、ここを 0 にすると狭いウィンドウで地図が数十pxまで潰れ、
+   ポップアップ(maxWidth 260px)が収まらず「ピンを押しても何も出ない」ように見える。 */
+.main-wrap{display:flex;flex-direction:column;flex:2 1 0;min-width:360px;height:100%}
+/* ビュー切替と件数は「コンテンツの都合」なのでコンテンツ側の上に置く。
+   地図に浮かせず通常フローの帯にしているのは、表ビューの sticky ヘッダと重ならないようにするため。 */
+.main-toolbar{flex:0 0 auto;display:flex;align-items:center;gap:10px;
+  padding:6px 10px;border-bottom:1px solid var(--line);
+  background-color:var(--surface-0);background-image:var(--elev-1);
+  box-shadow:var(--edge-top),0 1px 0 rgba(0,0,0,.4)}
+/* ツールバーの中身は左端に寄せる。右寄せにすると、表ビューへ切り替えて一覧パネルが消えた瞬間に
+   ツールバーの右端が一覧の幅ぶん右へ動き、いま押した「地図/表」ボタンがカーソルの下から逃げる。
+   左端はパネルの開閉で動かないので、押した位置にボタンが留まる。 */
+.tb-count{font-size:12px;color:var(--muted);white-space:nowrap}
+.tb-reopen{display:none}
+.app.nav-collapsed .tb-reopen-nav{display:inline-flex}
+.app.list-collapsed .tb-reopen-list{display:inline-flex}
+.app.view-table .tb-reopen-list{display:none}
+/* 一覧の再開ボタンだけは、一覧が畳まれている側＝右端に置く */
+.tb-reopen-list{margin-left:auto}
+.view-toggle{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;
+  background-color:var(--surface-2);box-shadow:var(--edge-top),0 1px 2px rgba(0,0,0,.35)}
+.view-toggle button{border:0;background:transparent;color:var(--muted);padding:5px 13px;font-size:12px;
+  cursor:pointer;transition:background-image .12s ease,color .12s ease}
+.view-toggle button:hover:not(.active){background-image:var(--elev-2);color:var(--ink)}
+/* 選択中は「持ち上がったブランド色のキー」。ここが画面で一番強い操作なので唯一の塗りに使う */
+.view-toggle button.active{color:var(--brand-ink);font-weight:600;
+  background-image:linear-gradient(160deg,#6ee7b7,var(--brand) 60%,#14b89a);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 1px 3px rgba(0,0,0,.5)}
+#map{flex:1 1 auto;min-height:0;background:#e9e6e0}
+/* scrollbar-gutter:stable … 縦スクロールバーの幅をあらかじめ確保する。
+   絞り込みで行数が変わるたびにスクロールバーが出入りして、表やカードの幅が飛ぶのを防ぐ。 */
+#tableView{display:none;flex:1 1 auto;min-height:0;overflow:auto;scrollbar-gutter:stable;background:var(--surface-0)}
+.app.view-table #map{display:none}
+.app.view-table #tableView{display:block}
+.app.view-table .list-wrap{display:none}
+/* 一覧は幅を譲る側（min-width:0）。狭いときは地図を残して一覧が細くなる。
+   横並びが成立しない幅では下の @media で縦積みに切り替わる。 */
+.list-wrap{flex:0 0 var(--panel-w);width:var(--panel-w);height:100%;display:flex;flex-direction:column;
+  background:var(--surface-1);border-left:1px solid var(--line)}
 .app.list-collapsed .list-wrap{display:none}
 .list-head{display:flex;align-items:center;justify-content:space-between;
-  padding:6px 8px;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;color:var(--muted)}
-#list{flex:1 1 auto;overflow-y:auto;padding:8px}
-.list-reopen-btn{left:auto;right:8px}
-.app.list-collapsed .list-reopen-btn{display:block}
+  padding:6px 8px;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;color:var(--muted);
+  background-color:var(--surface-0);background-image:var(--elev-1);
+  box-shadow:var(--edge-top),0 1px 0 rgba(0,0,0,.35)}
+#list{flex:1 1 auto;overflow-y:auto;scrollbar-gutter:stable;padding:8px}
 
-/* タイル切替ボタン（自作。layers.png 非依存） */
-.tile-toggle{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
-.tile-toggle button{border:0;background:#fff;padding:4px 10px;font-size:12px;cursor:pointer}
-.tile-toggle button.active{background:var(--accent);color:#fff}
-
-/* マーカー（divIcon。marker-icon.png 非依存） */
+/* マーカー（divIcon。marker-icon.png 非依存）
+   塗り＝大分類の色(--pc)、文字は白で統一。
+   白統一のため全色を「白が乗る濃さ」に揃える必要があり、その制約下で識別が成立するのは6色まで
+   （MAJORS_BY_DS のコメント参照）。 */
 .pin{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-size:11px;font-weight:700;color:#fff;line-height:1;
-  border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);background:#888;
+  font-size:11px;font-weight:700;line-height:1;
+  background:var(--pc,#888);color:#fff;
+  border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.22);
   transition:transform .1s ease, opacity .1s ease}
-.pin.unvisited{border-style:dashed;border-color:#333;opacity:.85}
-.pin.hi{transform:scale(1.45);box-shadow:0 0 0 3px rgba(37,99,235,.6),0 2px 6px rgba(0,0,0,.5)}
+/* 未訪問は色を変えない（塗りも文字色もそのまま）。白い外枠を破線にするだけの形の違いで示す。
+   opacity も落とさない（薄いピンは「無効」に見えるため）。 */
+.pin.unvisited{border-style:dashed}
+/* 強調リングは無彩色。データ色（特に青）と同化しないよう白→ink の二重リングにする */
+.pin.hi{transform:scale(1.45);
+  box-shadow:0 0 0 3px rgba(255,255,255,.95),0 0 0 5px var(--on-map-ink),0 2px 6px rgba(0,0,0,.3)}
 .pin.dim{opacity:.2}
+/* マーカーの既定フォーカス枠（青点線）は消すが、キーボード時はピン側にリングを出す */
+.leaflet-marker-icon:focus:not(:focus-visible),.leaflet-interactive:focus:not(:focus-visible){outline:none}
+.leaflet-marker-icon:focus-visible{outline:none}
+.leaflet-marker-icon:focus-visible .pin{
+  box-shadow:0 0 0 3px rgba(255,255,255,.95),0 0 0 5px var(--on-map-ink),0 2px 6px rgba(0,0,0,.3)}
+
+/* 大分類バッジ：ピンと同じ「色地＋1文字」。チップに出すことで凡例を兼ねる
+   （麺/肉/魚/和/中/エ/洋 は初見で読めないので、色→意味 だけでなく 文字→意味 の対応が必要） */
+.genre-badge{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+  width:17px;height:17px;border-radius:50%;font-size:11px;font-weight:700;line-height:1;
+  background:var(--pc,#888);color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.45)}
 
 /* リストカード */
-.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer}
-.card:hover{border-color:var(--accent)}
+.card{border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:9px;cursor:pointer;
+  background-color:var(--surface-0);background-image:var(--elev-1);
+  box-shadow:var(--edge-top),var(--shadow-1);
+  transition:transform .12s ease,box-shadow .12s ease,background-image .12s ease,border-color .12s ease}
+/* hover で一段持ち上がる（影を強く・グラデーションを明るく・1px 浮かせる） */
+.card:hover,.card:focus-within{border-color:var(--brand);background-image:var(--elev-2);
+  box-shadow:var(--edge-top),var(--shadow-2);transform:translateY(-1px)}
 .card .name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px}
-.card .genre-dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto;border:1px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15)}
-.card .meta{color:var(--muted);font-size:12px;margin-top:2px}
-.card .ratings{font-size:12px;margin-top:3px}
-.card .comment{font-size:12px;margin-top:3px}
-.badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;background:#eee;color:#555;margin-left:4px}
-.badge.unvisited{background:#fff3cd;color:#8a6d3b;border:1px solid #f0e0a8}
-.nocoord{font-size:11px;color:#b45309;margin-top:3px}
-.gmaps{display:flex;gap:6px;margin-top:6px}
-.gmaps a{flex:1;text-align:center;text-decoration:none;font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid var(--line);color:var(--accent);background:#fff}
-.gmaps a:hover{background:var(--chip)}
+/* 店名そのものをボタンにする：カードは「クリックできる面」だが、
+   中にリンク(Maps)を持つので card 自体を role=button にはできない（入れ子が不正になる）。
+   キーボードはこのボタンに止まり、Enter/Space の click がカードまで上がって地図が動く。 */
+.card .name-btn{border:0;background:none;padding:0;margin:0;font:inherit;color:inherit;
+  text-align:left;cursor:pointer;min-width:0}
+.card .name-btn:hover{text-decoration:underline}
+.card .meta{color:var(--muted);font-size:12px;margin-top:3px}
+.card .comment{font-size:12px;margin-top:4px}
+/* Google Maps は「毎行同じ全幅ボタン」だと一覧で一番強い要素になってしまうので、右上の小さなリンクに格下げ */
+.card-map{margin-left:auto;flex:0 0 auto;font-size:12px;font-weight:400;color:var(--muted);
+  text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:2px 7px;
+  background-color:var(--surface-2);background-image:var(--elev-1);box-shadow:var(--edge-top)}
+.card-map:hover{color:var(--ink);border-color:var(--brand);background-image:var(--elev-2)}
+.badge{display:inline-block;font-size:11px;padding:1px 6px;border-radius:8px;
+  background:var(--surface-2);color:var(--muted);font-weight:400}
+.badge.unvisited{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
+.nocoord{font-size:12px;color:var(--warn);margin-top:4px}
 
-/* ポップアップ内 */
+/* 評価：5段の順序尺度なのでドットで見せる（総合点順に並ぶ一覧で、隣と比較できるようにする）。
+   色相は大分類が使っているので、ここは ink の濃淡だけで表現する。 */
+.ratings{margin-top:5px;font-size:12px}
+.ratings .rt{display:flex;align-items:baseline;gap:6px;line-height:1.4;white-space:nowrap}
+.ratings .rl{flex:0 0 30px;color:var(--muted)}
+.ratings .rt-total b{font-size:15px}
+.ratings .stars{letter-spacing:1.5px}
+.ratings .stars .on{color:var(--ink)}
+.ratings .stars .off{color:var(--faint)}
+/* ドットは読み上げには無意味なので、スクリーンリーダー用に数値を添える */
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ポップアップ内。
+   ポップアップは「明るい地図の上の白い吹き出し」＝ライト面なので、UI のダークトークンをそのまま
+   使うと文字が白飛びする。ここだけトークンをライト値に上書きする（CSS 変数は継承するので、
+   中の .badge / .ratings / .gmaps などの既存ルールが自動的にライト配色で解決される）。 */
+/* Leaflet 既定の白い吹き出しを上書きしてダークにする。
+   ポップアップは地図の一部ではなく「地図の上に浮く UI パネル」なので、UI と同じ配色にする方が一貫する。
+   明るい淡色タイルに対して 13.7:1 なので、暗い面のほうがむしろはっきり浮く。
+   ライト用にトークンを上書きする必要も無くなるので、中の .badge / .ratings / .gmaps もそのまま使える。 */
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{
+  background-color:var(--surface-pop);color:var(--ink);
+  box-shadow:0 2px 8px rgba(0,0,0,.45),0 16px 36px rgba(0,0,0,.5)}
+.leaflet-popup-content-wrapper{background-image:var(--elev-1);
+  border:1px solid var(--line);border-radius:12px}
+.leaflet-container a.leaflet-popup-close-button{color:var(--muted)}
+.leaflet-container a.leaflet-popup-close-button:hover,
+.leaflet-container a.leaflet-popup-close-button:focus{color:var(--brand);background:transparent}
 .popup .pname{font-weight:700;font-size:14px;margin-bottom:2px}
-.popup .prow{font-size:12px;margin:1px 0}
-.popup .gmaps{margin-top:6px}
+.popup .prow{font-size:12px;margin:2px 0}
+.popup .gmaps{display:flex;margin-top:8px}
+.popup .gmaps a{flex:1;text-align:center;font-size:12px;padding:5px 6px;border-radius:7px;
+  border:1px solid var(--line);color:var(--ink);text-decoration:none;
+  background-color:var(--surface-2);background-image:var(--elev-1);
+  box-shadow:var(--edge-top),var(--shadow-1)}
+.popup .gmaps a:hover{background-image:var(--elev-2);border-color:var(--brand);box-shadow:var(--edge-top),var(--shadow-2)}
 
-.legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.legend .item{display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--muted)}
-.legend .dot{width:11px;height:11px;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+/* 表ビュー（同ページ内。絞り込み結果を表示、列見出しで並び替え）
+   数値列は詰め、感想・備考は可変幅にして余り幅を吸わせる（読みたい列に幅を回す） */
+.tbl-count{color:var(--muted);font-size:12px;padding:8px 10px 6px}
+table.data-tbl{border-collapse:collapse;table-layout:fixed;font-size:13px}
+table.data-tbl th,table.data-tbl td{border:1px solid var(--line);padding:5px 8px;text-align:left;
+  vertical-align:top;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table.data-tbl td.wrap{white-space:normal;word-break:break-word}
+table.data-tbl th{position:sticky;top:0;z-index:3;cursor:pointer;user-select:none;
+  background-color:var(--surface-2);background-image:var(--elev-1);
+  box-shadow:var(--edge-top),0 1px 0 rgba(0,0,0,.4)}
+table.data-tbl th:hover{background-image:var(--elev-2)}
+table.data-tbl th .arrow{color:var(--ink);font-size:10px;margin-left:3px}
+table.data-tbl td.num,table.data-tbl th.num{text-align:right}
+.data-tbl .maj{display:inline-block;border-radius:10px;padding:1px 7px;font-size:12px;white-space:nowrap;
+  background:var(--pc,#888);color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.45)}
+.data-tbl .unv{color:var(--warn);font-size:11px}
+.data-tbl a.g{color:var(--ink);text-decoration:underline}
 
-@media (max-width:760px){
+/* 左パネル320 + 地図360 + 右パネル320 = 1000px を下回ると横並びが成立しないので縦積みへ。
+   （左右のパネルを同じ 320px 固定にしたので、境目は 1000px） */
+@media (max-width:1000px){
   .app{flex-direction:column;height:auto;overflow:visible}
   .sidebar{flex:none;width:auto;max-height:46vh;border-right:0;border-bottom:1px solid var(--line)}
   .app.nav-collapsed .sidebar{margin-left:0;display:none}
   .content{flex-direction:column;height:auto}
+  .main-wrap{flex:none;min-width:0;height:auto}
   #map{flex:none;height:52vh}
-  .list-wrap{flex:none;max-width:none;height:auto;border-left:0;border-top:1px solid var(--line)}
+  #tableView{flex:none;height:70vh}
+  .list-wrap{flex:none;width:auto;min-width:0;max-width:none;height:auto;border-left:0;border-top:1px solid var(--line)}
   #list{overflow:visible}
 }
 </style>
@@ -804,22 +979,16 @@ table.data-tbl td.num,table.data-tbl th.num{text-align:right}
 <div class="app" id="app">
   <aside class="sidebar" id="sidebar">
     <div class="side-head">
-      <h1 id="mapTitle">🍽 市ヶ谷ランチマップ</h1>
+      <h1 id="mapTitle">市ヶ谷ランチマップ</h1>
       <button class="icon-btn" id="collapseBtn" type="button" title="フィルタを閉じる" aria-label="フィルタを閉じる">«</button>
     </div>
-    <div class="view-toggle" id="mapTypeToggle" title="表示するマップ">
-      <button data-map="lunch" class="active" type="button">🍽 ランチ</button>
-      <button data-map="izakaya" type="button">🍶 居酒屋</button>
-    </div>
-    <span class="counter" id="counter"></span>
-    <div class="view-toggle" id="viewToggle">
-      <button data-view="map" class="active" type="button">🗺 地図</button>
-      <button data-view="table" type="button">📋 表</button>
+    <div class="ds-tabs" id="mapTypeToggle" role="tablist" title="表示するマップ">
+      <button data-map="lunch" class="active" type="button" role="tab" aria-selected="true">🍽 ランチ</button>
+      <button data-map="izakaya" type="button" role="tab" aria-selected="false">🍶 居酒屋</button>
     </div>
 
-    <div class="control-group">
-      <span class="label">検索（店名・カテゴリ・感想）</span>
-      <input type="text" id="search" placeholder="キーワード…">
+    <div class="side-search">
+      <input type="text" id="search" placeholder="店名・カテゴリ・感想で検索…" aria-label="店名・カテゴリ・感想で検索">
     </div>
 
     <div class="filter-group" id="fgArea">
@@ -830,35 +999,48 @@ table.data-tbl td.num,table.data-tbl th.num{text-align:right}
       <button class="fg-head" type="button"><span class="chev">▾</span>ジャンル</button>
       <div class="fg-body chips" id="genreChips"></div>
     </div>
-
-    <div class="control-group">
-      <span class="label">訪問状態</span>
-      <div class="radios" id="visitRadios">
-        <label><input type="radio" name="visit" value="all" checked>すべて</label>
-        <label><input type="radio" name="visit" value="visited">訪問済</label>
-        <label><input type="radio" name="visit" value="unvisited">未訪問</label>
+    <div class="filter-group" id="fgVisit">
+      <button class="fg-head" type="button"><span class="chev">▾</span>訪問状態</button>
+      <div class="fg-body">
+        <div class="radios" id="visitRadios">
+          <label><input type="radio" name="visit" value="all" checked>すべて</label>
+          <label><input type="radio" name="visit" value="visited">訪問済</label>
+          <label><input type="radio" name="visit" value="unvisited">未訪問</label>
+        </div>
       </div>
     </div>
     <div class="filter-group" id="fgScore">
       <button class="fg-head" type="button"><span class="chev">▾</span>評価で絞り込み（各下限）</button>
       <div class="fg-body" id="scoreSliders"></div>
     </div>
+
+    <p class="side-note" id="nocoordNote" hidden></p>
   </aside>
 
-  <button class="reopen-btn" id="reopenBtn" type="button" title="フィルタを開く" aria-label="フィルタを開く">»</button>
-
   <div class="content">
-    <div id="map"></div>
+    <div class="main-wrap">
+      <div class="main-toolbar">
+        <button class="icon-btn tb-reopen tb-reopen-nav" id="reopenBtn" type="button"
+                title="フィルタを開く" aria-label="フィルタを開く">»</button>
+        <div class="view-toggle" id="viewToggle">
+          <button data-view="map" class="active" type="button">地図</button>
+          <button data-view="table" type="button">表</button>
+        </div>
+        <span class="tb-count" id="counter"></span>
+        <button class="icon-btn tb-reopen tb-reopen-list" id="listReopenBtn" type="button"
+                title="一覧を開く" aria-label="一覧を開く">«</button>
+      </div>
+      <div id="map"></div>
+      <div id="tableView"></div>
+    </div>
+
     <div class="list-wrap" id="listWrap">
       <div class="list-head"><span>一覧</span>
         <button class="icon-btn" id="listCollapseBtn" type="button" title="一覧を閉じる" aria-label="一覧を閉じる">»</button>
       </div>
       <div id="list"></div>
     </div>
-    <div id="tableView"></div>
   </div>
-
-  <button class="reopen-btn list-reopen-btn" id="listReopenBtn" type="button" title="一覧を開く" aria-label="一覧を開く">«</button>
 </div>
 
 <!-- データ：CSV を生テキストのまま埋め込む（JS でパース）。ランチと居酒屋の2データセット -->
@@ -968,35 +1150,74 @@ const lunchRecords   = parseDataset("data", "lunch");
 const izakayaRecords = parseDataset("data-izakaya", "izakaya");
 const records = lunchRecords.concat(izakayaRecords);
 const DATASET_TOTAL = { lunch: lunchRecords.length, izakaya: izakayaRecords.length };
-const DATASET_TITLE = { lunch: "🍽 市ヶ谷ランチマップ", izakaya: "🍶 市ヶ谷居酒屋マップ" };
+const DATASET_TITLE = { lunch: "市ヶ谷ランチマップ", izakaya: "市ヶ谷居酒屋マップ" };
 let activeDataset = "lunch";
 
 /* ===== ジャンル分類 =====
-   大分類は CSV の「大分類」列だけを正とする（未記入は「その他」）。色分け・凡例・フィルタに使用。
-   カテゴリ原文はポップアップ/カードに別途表示。色＋1文字ラベルで区別（白文字が乗るので濃いめの色）。 */
-const OTHER = {g:"その他", label:"他", color:"#64748b"};
-// 大分類はマップ（データセット）ごとに別体系。CSVの「大分類」列の値が下の g と一致すると色が付く。
+   大分類は CSV の「大分類」列だけを正とする（未記入は「その他」）。色分け・チップ・フィルタに使用。
+
+   配色は 2026-08-12 の精査で検証したもの（dataviz の categorical チェック / 地図なので all-pairs 判定）。
+   旧配色は 中華↔魚 が deutan ΔE 1.3、麺類↔エスニック が通常視 ΔE 6.5（要 15）で識別が成立していなかった。
+   原因は色数ではなく「全色が同じ明度」だったこと。
+
+   ★制約：ピンの文字は白で統一する（色ごとに白/黒を切り替えると文字色がバラバラに見える）。
+     つまり全色が「白文字が 4.5:1 で乗る濃さ」である必要がある。この制約下で 7色すべて別色が成立する
+     ことを sRGB 格子の総当たり探索で確認済み（同条件で最大 10 色まで入る）。
+
+   詰まるのは1ペアだけだった：**肉（茶）↔ エスニック・カレー（黄土）**。白文字統一だと明るい黄色が
+   使えず暖色の帯が狭いため、この2つは最大限離しても基準に 1.5 足りない。そこで肉を茶から
+   「明るい赤（赤身寄り）」へ動かして解いている。他のペアは +6 〜 +30 の余裕がある。
+
+   検証結果（7色 / 地図なので all-pairs 判定）：
+     通常視 worst ΔE 15.9（要15）/ CVD worst 7.0（要6。floor 帯だが1文字ラベルが
+     secondary encoding として機能するので許容）/ 地図コントラスト 全色 3:1 以上 /
+     白文字 全色 4.5:1 以上。「その他」#1f2937 とも通常視 24.8 離れている。
+   ★色を触ったら必ず再検証すること（validate_palette の all-pairs / 地図面 #f2efe9）。
+     8個目の大分類が必要になったら、色を増やさず「その他」に畳む。
+   ★ダークなカードの上ではこの7色のうち5色が 3:1 を割る（例 中華 1.87）。バッジは明るいリング
+     rgba(255,255,255,.45) で面から起こしているので、あのリングは装飾ではなく必須。
+   ★役割ごとの予約色（brand 緑 / warn 金 / エリア枠 赤）との距離も確認済み。 */
+const OTHER = {g:"その他", label:"他", color:"#1f2937"};
+/* ===== 大分類の並び順 =====
+   この配列の順が、そのままジャンルチップと凡例の順になる（末尾に「その他」が付く）。
+   並びの規則：**先に「料理の系統」（日本→西へ）、後に「素材・形態」**。
+   大分類は 麺類=形態 / 肉・魚=素材 / 和・中・エ・洋=料理の系統 と軸が混ざっているので、
+   件数順や五十音順にすると理由の分からない並びになる。軸ごとにまとめると読み取れる。
+   ★ランチと居酒屋で色相を共通化してある（和=緑 / 中華=濃赤 / 洋・バル=紫 / 肉=明赤 / 魚=青 / 串=黄土）。 */
 const MAJORS_BY_DS = {
   lunch: [
-    {g:"麺類",             label:"麺", color:"#e11d48"},
-    {g:"肉",               label:"肉", color:"#ea580c"},
-    {g:"魚・海鮮",         label:"魚", color:"#2563eb"},
-    {g:"和食・定食",       label:"和", color:"#16a34a"},
-    {g:"中華",             label:"中", color:"#9333ea"},
-    {g:"エスニック・カレー", label:"エ", color:"#db2777"},
-    {g:"洋食・カフェ",     label:"洋", color:"#0d9488"},
+    // 料理の系統
+    {g:"和食・定食",         label:"和", color:"#007755"},
+    {g:"中華",               label:"中", color:"#991100"},
+    {g:"エスニック・カレー", label:"エ", color:"#996600"},
+    {g:"洋食・カフェ",       label:"洋", color:"#7700cc"},
+    // 素材・形態
+    {g:"麺類",               label:"麺", color:"#990077"},
+    {g:"肉",                 label:"肉", color:"#dd2266"},
+    {g:"魚・海鮮",           label:"魚", color:"#0000ff"},
   ],
   izakaya: [
-    {g:"焼き鳥・串",       label:"串", color:"#ea580c"},
-    {g:"魚介・海鮮",       label:"魚", color:"#2563eb"},
-    {g:"焼肉・ホルモン",   label:"肉", color:"#b91c1c"},
-    {g:"和食・小料理",     label:"和", color:"#16a34a"},
-    {g:"中華・餃子",       label:"中", color:"#9333ea"},
-    {g:"バル・ワイン",     label:"バ", color:"#0d9488"},
+    // 料理の系統
+    {g:"和食・小料理",   label:"和", color:"#007755"},
+    {g:"中華・餃子",     label:"中", color:"#991100"},
+    {g:"バル・ワイン",   label:"バ", color:"#7700cc"},
+    // 素材・形態
+    {g:"焼き鳥・串",     label:"串", color:"#996600"},
+    {g:"焼肉・ホルモン", label:"肉", color:"#dd2266"},
+    {g:"魚介・海鮮",     label:"魚", color:"#0000ff"},
   ],
 };
 function majorOf(g, ds){ return (MAJORS_BY_DS[ds] || []).find(m => m.g === g) || OTHER; }
-// 大分類は CSV の「大分類」列のみを正とする（カテゴリからの自動判定は行わない）。
+
+/* ===== 地域（丁目）の並び順 =====
+   CSV の登場順だと意味のない順になるので明示的に持つ。北の市谷田町から九段へ下り、
+   番町を六→一の順に、最後に麹町。三番町は現在データが無いが、増えたときに正しい位置に入るよう並べてある。
+   この配列に無い地域は末尾に回す（新しい丁目を CSV に足しても消えない）。 */
+const AREA_ORDER = ["市谷田町", "九段北", "九段南", "六番町", "五番町", "四番町", "三番町", "二番町", "一番町", "麹町"];
+function areaRank(a){ const i = AREA_ORDER.indexOf(a); return i < 0 ? AREA_ORDER.length : i; }
+function byArea(a, b){ return (areaRank(a) - areaRank(b)) || a.localeCompare(b, "ja"); }
+/* 色は CSS 変数で流す（.pin / .genre-badge / .maj が同じ仕組みを共有）。文字色は白で固定 */
+function colorVars(color){ return "--pc:" + color; }
 
 /* 各レコードに派生プロパティを付与 */
 records.forEach(r => {
@@ -1010,8 +1231,8 @@ records.forEach(r => {
   const lat = parseFloat(r["lat"]), lng = parseFloat(r["lng"]);
   r._hasCoord = !isNaN(lat) && !isNaN(lng) && r["lat"]!=="" && r["lng"]!=="";
   r._lat = lat; r._lng = lng;
+  r._dlat = lat; r._dlng = lng;
 });
-// 座標未設定の件数はアクティブなデータセットで数える（render 内で計算）
 
 // 丁目境界ポリゴン（エリア hover 時の縁取り用。国土地理院住所→LOA由来。ビルド時に埋め込み）
 const AREA_POLYGONS =
@@ -1033,57 +1254,133 @@ function openUrl(r){
   return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(r["店名"] + " 市ヶ谷");
 }
 
+function esc(s){
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+/* 地図レイヤ（Leaflet に色を渡す所）は CSS の変数を読む。トークンを2箇所で持たないため */
+function cssVar(name, fallback){
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name);
+  return (v || "").trim() || fallback;
+}
+const MARK = cssVar("--on-map-mark", "#dc2626"); // エリア境界（赤）
+// --on-map-ink（ピンの強調リング）は CSS 側だけで完結するので JS では読まない
+
+/* ===== ほぼ同じ位置にある店（＝同じ建物）を円状にずらす =====
+   データの lat/lng は真値のまま、表示位置(_dlat/_dlng)だけずらす。
+   半径は「店数」と「ズーム」から決める。固定半径(0.0002度)だとズーム16で 11.5px しかなく、
+   ピン直径22px に対して 3 件以上で必ず重なっていた。
+
+   ★束ね方の注意：以前は「住所の文字列が同じなら同じ建物」として束ねていたが、これは誤り。
+     千代田区五番町5-1 には JS市ヶ谷ビル / 第8田中ビル など複数の建物があり、実座標は 54.7m 離れている。
+     住所で束ねると重心のまわりに散らされ、巴のピンが自分のビルから外れて描かれていた。
+     知りたいのは「地図上で同じ点に重なるか」なので、住所ではなく**実座標の近さ**で束ねる。
+     しきい値 15m は実データの「同一建物内のばらつき 最大 10.8m」と「別建物の最小 54.7m」の間に取った
+     （同じビルでも店ごとに数m違う座標が入っているため、完全一致では束ねられない）。 */
+const PIN_D = 22, PIN_GAP = 4, SAME_SPOT_M = 15;
+function metersBetween(a, b){
+  const dy = (a._lat - b._lat) * 111320;
+  const dx = (a._lng - b._lng) * 111320 * Math.cos(a._lat * Math.PI / 180);
+  return Math.sqrt(dx * dx + dy * dy);
+}
+const clusters = [];
+(function(){
+  /* 「15m 以内を順につないでいく」単純な連結だと連鎖する：A-B が 14m、B-C が 14m だと
+     28m 離れた A と C まで同じ輪に入り、別の住所の店まで巻き込んでしまう（実データで
+     六番町1-1〜3-11 の7店が直径22.9m のひと塊になった）。
+     そこで「結合後のグループの直径が 15m を超えるなら結合しない」という上限つきの凝集にする。 */
+  const groups = records.filter(r => r._hasCoord).map(r => [r]);
+  for(;;){
+    let pick = null, pickNear = Infinity;
+    for(let i = 0; i < groups.length; i++){
+      for(let j = i + 1; j < groups.length; j++){
+        if(groups[i][0]._dataset !== groups[j][0]._dataset) continue; // 別のマップの店は束ねない
+        let far = 0, near = Infinity;
+        for(const a of groups[i]) for(const b of groups[j]){
+          const d = metersBetween(a, b);
+          if(d > far) far = d;
+          if(d < near) near = d;
+        }
+        if(far > SAME_SPOT_M) continue;      // 直径の上限を超えるので結合しない
+        if(near < pickNear){ pickNear = near; pick = [i, j]; }
+      }
+    }
+    if(!pick) break;
+    groups[pick[0]] = groups[pick[0]].concat(groups[pick[1]]);
+    groups.splice(pick[1], 1);
+  }
+  groups.forEach(g => {
+    clusters.push({
+      members: g,
+      clat: g.reduce((s, r) => s + r._lat, 0) / g.length,
+      clng: g.reduce((s, r) => s + r._lng, 0) / g.length,
+    });
+  });
+})();
+// n 個のピンが重ならないリング半径（px）。隣り合うピンの中心間距離が PIN_D+PIN_GAP になるように取る
+function ringRadiusPx(n){ return Math.max(13, (PIN_D + PIN_GAP) / (2 * Math.sin(Math.PI / n))); }
+function metersPerPixel(lat, zoom){ return 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom); }
+function layoutOffsets(zoom){
+  clusters.forEach(c => {
+    const n = c.members.length;
+    if(n === 1){ const r = c.members[0]; r._dlat = r._lat; r._dlng = r._lng; return; }
+    // ズームを引くと px あたりの距離が伸びるので、実距離としてのズレに上限を置く
+    // （でないと広域ズームで「同ビルの店」が数km離れた位置に描かれる）
+    // 実距離としてのズレの上限。広域へ引いたときに同ビルの店が数km離れて描かれるのを防ぐ。
+    // ズーム15でも必要な 86m が通る値にしてあるので、既定を寄せても引いても成立する
+    const meters = Math.min(120, ringRadiusPx(n) * metersPerPixel(c.clat, zoom));
+    const dLat = meters / 111320;
+    c.members.forEach((r, i) => {
+      const ang = (2 * Math.PI * i) / n - Math.PI / 2;
+      r._dlat = c.clat + dLat * Math.sin(ang);
+      r._dlng = c.clng + dLat * Math.cos(ang) / Math.cos(c.clat * Math.PI / 180);
+    });
+  });
+}
+
 /* ===== 地図 ===== */
 // 淡色（pale）を既定・唯一のタイルにする（標準はオレンジが強く目に痛いため切替は廃止）
 const GSI_PALE = "https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png";
 const ATTR = '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>';
+const INIT_ZOOM = 17;   // 既定は一段寄せる（1440x900 で 46件中 35件が初期表示に入る）
 
 /* 地図の初期化は try で囲む：万一 Leaflet 未読込やタイル初期化に失敗しても、
    一覧・絞り込み・検索・Google Maps リンクは動き続ける */
 let map = null, mapReady = false;
 const markers = {};
+layoutOffsets(INIT_ZOOM);
 try {
-  // 地図の初期中心（このエリアの中心付近に固定）
-  map = L.map("map", {zoomControl:true}).setView([35.68898, 139.734176], 16);
+  // 地図の初期中心（このエリアの中心付近に固定）。
+  // ズームは左下：左上はサイドバー再開ボタン等と取り合いになるため空けておく。
+  map = L.map("map", {zoomControl:false}).setView([35.68898, 139.734176], INIT_ZOOM);
+  L.control.zoom({position:"bottomleft"}).addTo(map);
   L.tileLayer(GSI_PALE, {maxZoom:18, attribution:ATTR}).addTo(map);
   mapReady = true;
-
-  /* 同一座標に複数店（同ビル、または GSI の番地丸め）がある場合は、
-     小さく円状にずらして重なりを防ぐ（データの lat/lng は真値のまま、表示だけずらす） */
-  (function(){
-    // 「同じ住所（＝同ビル）」の店だけ円状にずらす。近いだけの別ビルは実座標のまま。
-    const groups = {};
-    records.forEach(r => {
-      if(!r._hasCoord) return;
-      const k = r._dataset + "|" + ((r["住所"] || "").trim() || (r._lat.toFixed(6) + "," + r._lng.toFixed(6)));
-      (groups[k] = groups[k] || []).push(r);
-    });
-    Object.keys(groups).forEach(k => {
-      const g = groups[k];
-      if(g.length === 1){ g[0]._dlat = g[0]._lat; g[0]._dlng = g[0]._lng; return; }
-      // クラスタ重心の周りに等間隔リング状で配置（同ビルの複数店がきれいに開く）
-      const clat = g.reduce((s, r) => s + r._lat, 0) / g.length;
-      const clng = g.reduce((s, r) => s + r._lng, 0) / g.length;
-      const R = 0.0002; // 約22m
-      g.forEach((r, i) => {
-        const ang = (2 * Math.PI * i) / g.length - Math.PI / 2;
-        r._dlat = clat + R * Math.sin(ang);
-        r._dlng = clng + R * Math.cos(ang) / Math.cos(clat * Math.PI / 180);
-      });
-    });
-  })();
 
   /* マーカー（divIcon）を座標のある店にだけ作る */
   records.forEach(r => {
     if(!r._hasCoord) return;
-    const html = '<div class="pin' + (r._visited ? "" : " unvisited") + '" style="background:' + r._color + '">' + esc(r._label) + '</div>';
-    const icon = L.divIcon({html, className:"", iconSize:[22,22], iconAnchor:[11,11], popupAnchor:[0,-11]});
-    const m = L.marker([r._dlat, r._dlng], {icon});
-    m.bindPopup(popupHtml(r), {maxWidth:260});
+    const html = '<div class="pin' + (r._visited ? "" : " unvisited") + '" style="'
+      + colorVars(r._color) + '">' + esc(r._label) + '</div>';
+    const icon = L.divIcon({html, className:"", iconSize:[22,22], iconAnchor:[11,11], popupAnchor:[0,-13]});
+    const m = L.marker([r._dlat, r._dlng], {icon, title:r["店名"]});
+    // minWidth と maxWidth を同じにして幅を固定する。可変だと店ごとに吹き出しの横幅が変わり、
+    // 評価の行が折り返したりしなかったりして「店によってレイアウトが違う」ように見える。
+    m.bindPopup(popupHtml(r), {minWidth:268, maxWidth:268});
     markers[r["店舗ID"]] = m;
+  });
+
+  // ズームが変わると px 換算が変わるので、同ビルの分散をやり直す
+  map.on("zoomend", () => {
+    layoutOffsets(map.getZoom());
+    records.forEach(r => {
+      const m = markers[r["店舗ID"]];
+      if(m && r._hasCoord) m.setLatLng([r._dlat, r._dlng]);
+    });
   });
 } catch (err) {
   const mapEl = document.getElementById("map");
+  // このメッセージは #map の中＝明るい下地の上に出るので、ダークの --warn ではなくライト側の警告色を使う
   if (mapEl) mapEl.innerHTML = '<div style="padding:16px;color:#b45309;font-size:13px">'
     + '地図を初期化できませんでした（' + esc(String((err && err.message) || err)) + '）。<br>'
     + '一覧・検索・絞り込み・Google Maps リンクはそのままご利用いただけます。</div>';
@@ -1099,29 +1396,34 @@ function popupHtml(r){
   parts.push(ratingsLine(r));
   if(r["感想"]) parts.push('<div class="prow">感想：' + esc(r["感想"]) + '</div>');
   if(r["備考"]) parts.push('<div class="prow">備考：' + esc(r["備考"]) + '</div>');
-  parts.push(gmapsHtml(r));
+  parts.push('<div class="gmaps"><a href="' + openUrl(r) + '" target="_blank" rel="noopener">Google Mapsで開く</a></div>');
   return '<div class="popup">' + parts.join("") + '</div>';
 }
 
+/* 評価は 1〜5 の順序尺度なので、塗りつぶした星（★）と抜いた星（☆）で見せる。
+   1軸につき1行に縦積みするのは、横並びだと吹き出しやカードの幅で折り返しが変わり、
+   店ごとにレイアウトが違って見えるため（幅可変のポップアップで実際にそうなっていた）。
+   絵文字ではなく文字の ★☆ を使う（OS で字形・色が変わらない）。
+   色相は大分類とブランド色が使っているので、ここは ink の濃淡だけ。 */
+function stars(label, v){
+  const n = parseInt(v, 10);
+  if(isNaN(n) || n < 1) return "";
+  const on = Math.min(5, n);
+  return '<div class="rt"><span class="rl">' + label + '</span>'
+    + '<span class="stars" aria-hidden="true"><span class="on">' + "★".repeat(on) + '</span>'
+    + '<span class="off">' + "☆".repeat(5 - on) + '</span></span>'
+    + '<span class="sr">' + on + '/5</span></div>';
+}
 function ratingsLine(r){
   if(r._score === null) return '';
-  const cell = (label,v) => v ? (label + " " + esc(v) + "/5") : "";
-  const arr = [cell("美味しさ", r["美味しさ"]), cell("量", r["量"]), cell("安さ", r["値段"])].filter(Boolean);
-  return '<div class="prow"><b>総合点 ' + r._score + '/5</b>' + (arr.length ? '（' + arr.join(" ・ ") + '）' : '') + '</div>';
-}
-
-function gmapsHtml(r){
-  return '<div class="gmaps">'
-    + '<a href="' + openUrl(r) + '" target="_blank" rel="noopener">Google Mapsで開く</a>'
-    + '</div>';
-}
-
-function esc(s){
-  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const rows = [stars("味", r["美味しさ"]), stars("量", r["量"]), stars("安", r["値段"])].filter(Boolean);
+  return '<div class="ratings">'
+    + '<div class="rt rt-total"><span class="rl">総合</span><b>' + r._score + '</b></div>'
+    + rows.join("") + '</div>';
 }
 
 /* ===== フィルタ UI 構築 ===== */
-/* チップ hover の強調ロジック（共有） */
+/* チップ hover / focus の強調ロジック（共有） */
 let _outline = null;
 function _clearOutline(){ if(_outline){ map.removeLayer(_outline); _outline = null; } }
 function _setHi(pred){
@@ -1139,43 +1441,58 @@ function _showOutline(area){
   _clearOutline();
   const polys = (typeof AREA_POLYGONS !== "undefined") && AREA_POLYGONS[area];
   if(!polys || !polys.length) return;
-  _outline = L.polygon(polys.map(ring => [ring]), {
-    color:"#e11d48", weight:2, fill:true, fillColor:"#e11d48", fillOpacity:0.06, interactive:false
-  }).addTo(map);
+  /* エリア枠は「今どこを見ているか」を一目で示したいので、無彩色ではなく色を付ける（--on-map-mark）。
+     白い縁取り(casing)を下に敷いて淡色タイルの地図線から浮かせ、破線にして境界だと分かるようにする。
+     色は赤（--on-map-mark）。大分類の赤系との数値上の近さを許容している理由はトークンの定義側に書いた。 */
+  const rings = polys.map(ring => [ring]);
+  const casing = L.polygon(rings, {color:"#fff", weight:8, opacity:.95,
+    fill:true, fillColor:MARK, fillOpacity:0.09, interactive:false});
+  const edge = L.polygon(rings, {color:MARK, weight:2.5, opacity:1, dashArray:"7 4",
+    fill:false, interactive:false});
+  _outline = L.layerGroup([casing, edge]).addTo(map);
+}
+/* hover だけだとキーボード・タッチで機能が存在しないことになるので、focus でも同じ強調を出す */
+function bindHi(label, cb, onEnter, onLeave){
+  label.addEventListener("mouseenter", onEnter);
+  label.addEventListener("mouseleave", onLeave);
+  cb.addEventListener("focus", onEnter);
+  cb.addEventListener("blur", onLeave);
 }
 
 /* 地域・ジャンルのチップを「表示中のマップ」単位で作り直す（切替のたびに呼ぶ） */
 function buildChips(ds){
   // 地域
-  const areas = [...new Set(records.filter(r => r._dataset === ds).map(r => r["地域"]))].filter(Boolean);
+  const areas = [...new Set(records.filter(r => r._dataset === ds).map(r => r["地域"]))].filter(Boolean).sort(byArea);
   const ac = document.getElementById("areaChips"); ac.innerHTML = "";
   areas.forEach(v => {
     const l = document.createElement("label");
     l.innerHTML = '<input type="checkbox" value="' + esc(v) + '" checked>' + esc(v);
     ac.appendChild(l);
   });
-  // ジャンル（大分類）。「その他」は常に選べるよう末尾に必ず出す
+  // ジャンル（大分類）。「その他」は常に選べるよう末尾に必ず出す。
+  // バッジは「色地＋1文字」= ピンと同じ見た目にして、この節が凡例も兼ねるようにする
   const order = [...(MAJORS_BY_DS[ds] || []).map(m => m.g), OTHER.g];
   const genres = order.filter(g => g === OTHER.g || records.some(r => r._dataset === ds && r._genre === g));
   const gc = document.getElementById("genreChips"); gc.innerHTML = "";
   genres.forEach(g => {
+    const m = majorOf(g, ds);
     const l = document.createElement("label");
     l.innerHTML = '<input type="checkbox" value="' + esc(g) + '" checked>'
-      + '<span class="genre-dot" style="width:10px;height:10px;background:' + majorOf(g, ds).color + '"></span>'
+      + '<span class="genre-badge" style="' + colorVars(m.color) + '">' + esc(m.label) + '</span>'
       + esc(g);
     gc.appendChild(l);
   });
-  // 新しいチップに hover 強調と change→再描画を付け直す
+  // 新しいチップに強調と change→再描画を付け直す
   if(mapReady){
     ac.querySelectorAll("label").forEach(label => {
       const cb = label.querySelector("input"); if(!cb) return;
-      label.addEventListener("mouseenter", () => { _setHi(r => r["地域"] === cb.value); _showOutline(cb.value); });
-      label.addEventListener("mouseleave", () => { _setHi(null); _clearOutline(); });
+      bindHi(label, cb,
+        () => { _setHi(r => r["地域"] === cb.value); _showOutline(cb.value); },
+        () => { _setHi(null); _clearOutline(); });
     });
     gc.querySelectorAll("label").forEach(label => {
       const cb = label.querySelector("input"); if(!cb) return;
-      label.addEventListener("mouseenter", () => _setHi(r => r._genre === cb.value));
-      label.addEventListener("mouseleave", () => _setHi(null));
+      bindHi(label, cb, () => _setHi(r => r._genre === cb.value), () => _setHi(null));
     });
   }
   [...ac.querySelectorAll("input"), ...gc.querySelectorAll("input")].forEach(el => el.addEventListener("change", render));
@@ -1188,7 +1505,7 @@ const SCORE_DEFS = [
   {key:"score",  label:"総合点",   val:r => r._score},
   {key:"tasty",  label:"美味しさ", val:r => numOf(r["美味しさ"])},
   {key:"amount", label:"量",       val:r => numOf(r["量"])},
-  {key:"cost",   label:"安さ",   val:r => numOf(r["値段"])},
+  {key:"cost",   label:"安さ",     val:r => numOf(r["値段"])},
 ];
 const thresholds = {};
 SCORE_DEFS.forEach(d => { thresholds[d.key] = 1; });
@@ -1198,7 +1515,7 @@ SCORE_DEFS.forEach(d => { thresholds[d.key] = 1; });
     const row = document.createElement("div");
     row.className = "slider-row";
     row.innerHTML = '<span class="slabel">' + esc(d.label) + '</span>'
-      + '<input type="range" min="1" max="5" step="1" value="1">'
+      + '<input type="range" min="1" max="5" step="1" value="1" aria-label="' + esc(d.label) + 'の下限">'
       + '<span class="sval">すべて</span>';
     const input = row.querySelector("input"), out = row.querySelector(".sval");
     input.addEventListener("input", () => {
@@ -1217,6 +1534,7 @@ function checkedValues(containerId){
 /* ===== 絞り込み・描画 ===== */
 const listEl = document.getElementById("list");
 const counterEl = document.getElementById("counter");
+const nocoordEl = document.getElementById("nocoordNote");
 const searchEl = document.getElementById("search");
 
 function currentFilter(){
@@ -1252,6 +1570,15 @@ function sortForList(a, b){
   return a["店名"].localeCompare(b["店名"], "ja");
 }
 
+/* カードから地図へ寄せる（表示位置 _dlat/_dlng に合わせる。真値だとポップアップがずれて見える） */
+function focusStore(r){
+  const m = markers[r["店舗ID"]];
+  if(mapReady && m && map.hasLayer(m)){
+    map.setView([r._dlat, r._dlng], Math.max(map.getZoom(), 17));
+    m.openPopup();
+  }
+}
+
 let currentVisible = [];
 function render(){
   const f = currentFilter();
@@ -1272,32 +1599,33 @@ function render(){
   visible.slice().sort(sortForList).forEach(r => {
     const card = document.createElement("div");
     card.className = "card";
-    let html = '<div class="name"><span class="genre-dot" style="background:' + r._color + '"></span>'
-      + esc(r["店名"]) + (r._visited ? "" : '<span class="badge unvisited">未訪問</span>') + '</div>';
+    let html = '<div class="name">'
+      + '<span class="genre-badge" style="' + colorVars(r._color) + '">' + esc(r._label) + '</span>'
+      + '<button type="button" class="name-btn" title="地図で表示">' + esc(r["店名"]) + '</button>'
+      + (r._visited ? "" : '<span class="badge unvisited">未訪問</span>')
+      + '<a class="card-map" href="' + openUrl(r) + '" target="_blank" rel="noopener"'
+      + ' title="Google Mapsで開く">Maps ↗</a></div>';
     html += '<div class="meta">' + esc(r._genre) + '（' + esc(r["カテゴリ"] || "分類なし") + '）・' + esc(r["地域"]);
     if(r["場所"]) html += '・' + esc(r["場所"]);
     html += '</div>';
-    const rl = ratingsLine(r);
-    if(rl) html += rl.replace("prow", "ratings");
+    html += ratingsLine(r);
     if(r["感想"]) html += '<div class="comment">' + esc(r["感想"]) + '</div>';
-    if(!r._hasCoord) html += '<div class="nocoord">📍 地図に未掲載（座標未設定）</div>';
-    html += gmapsHtml(r);
+    if(!r._hasCoord) html += '<div class="nocoord">地図に未掲載（座標未設定）</div>';
     card.innerHTML = html;
 
-    // カードクリック→地図パン＆ポップアップ（座標がある場合）
+    // カードのどこを押しても地図パン＆ポップアップ。店名ボタンの Enter/Space もここに上がってくる
     card.addEventListener("click", e => {
       if(e.target.closest("a")) return; // リンクは通常遷移
-      const m = markers[r["店舗ID"]];
-      if(mapReady && m && map.hasLayer(m)){
-        map.setView([r._lat, r._lng], Math.max(map.getZoom(), 17));
-        m.openPopup();
-      }
+      focusStore(r);
     });
     listEl.appendChild(card);
   });
 
+  counterEl.textContent = "表示中 " + visible.length + " / " + DATASET_TOTAL[activeDataset] + " 件";
+
   const nocoord = records.filter(r => r._dataset === activeDataset && !r._hasCoord).length;
-  counterEl.textContent = "表示中 " + visible.length + " / " + DATASET_TOTAL[activeDataset] + " 件 ・ 座標未設定 " + nocoord + " 件";
+  nocoordEl.hidden = nocoord === 0;
+  nocoordEl.textContent = nocoord ? ("座標未設定 " + nocoord + " 件（地図に未掲載。一覧・表には出ます）") : "";
 
   // 表ビューにも同じ絞り込み結果を反映
   currentVisible = visible;
@@ -1328,31 +1656,33 @@ function setList(collapsed){
 document.getElementById("listCollapseBtn").addEventListener("click", () => setList(true));
 document.getElementById("listReopenBtn").addEventListener("click", () => setList(false));
 
-/* ===== 表ビュー（同ページ内。絞り込み結果を表示、列見出しで並び替え） ===== */
+/* ===== 表ビュー（同ページ内。絞り込み結果を表示、列見出しで並び替え） =====
+   幅の配分：数値列は「4」1文字＋見出しが入る分だけに詰め、余り幅は感想・備考へ % で回す
+   （以前は数値4列に 304px を割り当てて、一番読みたい感想を 280px 固定にしていた）。 */
 const TBL_COLS = [
-  {k:"店名",   label:"店名",   type:"str", w:170, get:r => esc(r["店名"]) + (r._visited ? "" : ' <span class="unv">未訪問</span>'), val:r => r["店名"]},
-  {k:"大分類", label:"大分類", type:"str", w:120, get:r => '<span class="maj" style="background:' + r._color + '">' + esc(r._genre) + '</span>', val:r => r._genre},
-  {k:"地域",   label:"地域",   type:"str", w:80,  get:r => esc(r["地域"]), val:r => r["地域"]},
-  {k:"score",  label:"総合点", type:"num", w:76, get:r => r._score !== null ? r._score : "—", val:r => r._score},
-  {k:"tasty",  label:"美味しさ", type:"num", w:76, get:r => r["美味しさ"] || "—", val:r => numOf(r["美味しさ"])},
-  {k:"amount", label:"量",     type:"num", w:76, get:r => r["量"] || "—", val:r => numOf(r["量"])},
-  {k:"cost",   label:"安さ", type:"num", w:76, get:r => r["値段"] || "—", val:r => numOf(r["値段"])},
-  {k:"感想",   label:"感想",   type:"str", w:280, cls:"wrap", get:r => esc(r["感想"] || ""), val:r => r["感想"] || ""},
-  {k:"備考",   label:"備考",   type:"str", w:180, cls:"wrap", get:r => esc(r["備考"] || ""), val:r => r["備考"] || ""},
-  {k:"map",    label:"地図",   type:"str", w:110, get:r => '<a class="g" href="' + openUrl(r) + '" target="_blank" rel="noopener">Google Maps</a>', val:r => ""},
+  {k:"店名",   label:"店名",   type:"str", w:"180px", get:r => esc(r["店名"]) + (r._visited ? "" : ' <span class="unv">未訪問</span>'), val:r => r["店名"]},
+  {k:"大分類", label:"大分類", type:"str", w:"132px", get:r => '<span class="maj" style="' + colorVars(r._color) + '">' + esc(r._genre) + '</span>', val:r => r._genre},
+  {k:"地域",   label:"地域",   type:"rank", w:"76px", get:r => esc(r["地域"]), val:r => areaRank(r["地域"])},
+  {k:"score",  label:"総合点", type:"num", w:"64px",  get:r => r._score !== null ? r._score : "—", val:r => r._score},
+  {k:"tasty",  label:"美味しさ", type:"num", w:"72px", get:r => r["美味しさ"] || "—", val:r => numOf(r["美味しさ"])},
+  {k:"amount", label:"量",     type:"num", w:"52px",  get:r => r["量"] || "—", val:r => numOf(r["量"])},
+  {k:"cost",   label:"安さ",   type:"num", w:"56px",  get:r => r["値段"] || "—", val:r => numOf(r["値段"])},
+  {k:"感想",   label:"感想",   type:"str", w:"25%",   cls:"wrap", get:r => esc(r["感想"] || ""), val:r => r["感想"] || ""},
+  {k:"備考",   label:"備考",   type:"str", w:"12%",   cls:"wrap", get:r => esc(r["備考"] || ""), val:r => r["備考"] || ""},
+  {k:"map",    label:"地図",   type:"str", w:"90px",  get:r => '<a class="g" href="' + openUrl(r) + '" target="_blank" rel="noopener">Google Maps</a>', val:r => ""},
 ];
 let tblSortKey = "score", tblSortDir = -1;
 function renderTable(){
   const host = document.getElementById("tableView");
   const col = TBL_COLS.find(c => c.k === tblSortKey);
   const rows = currentVisible.slice().sort((a, b) => {
-    if(col.type === "num"){
+    if(col.type === "num" || col.type === "rank"){
       const va = col.val(a), vb = col.val(b);
       return ((va === null ? -Infinity : va) - (vb === null ? -Infinity : vb)) * tblSortDir;
     }
     return String(col.val(a) || "").localeCompare(String(col.val(b) || ""), "ja") * tblSortDir;
   });
-  const colgroup = "<colgroup>" + TBL_COLS.map(c => '<col style="width:' + c.w + 'px">').join("") + "</colgroup>";
+  const colgroup = "<colgroup>" + TBL_COLS.map(c => c.w ? '<col style="width:' + c.w + '">' : '<col>').join("") + "</colgroup>";
   const thClass = c => (c.type === "num" ? "num" : "");
   const tdClass = c => [c.type === "num" ? "num" : "", c.cls || ""].filter(Boolean).join(" ");
   const thead = "<tr>" + TBL_COLS.map(c => {
@@ -1360,8 +1690,8 @@ function renderTable(){
     return '<th class="' + thClass(c) + '" data-k="' + c.k + '">' + esc(c.label) + '<span class="arrow">' + ar + '</span></th>';
   }).join("") + "</tr>";
   const tbody = rows.map(r => "<tr>" + TBL_COLS.map(c => '<td class="' + tdClass(c) + '">' + c.get(r) + "</td>").join("") + "</tr>").join("");
-  host.innerHTML = '<div class="tbl-count">表示 ' + rows.length + ' / ' + DATASET_TOTAL[activeDataset] + ' 件（列見出しで並び替え）</div>'
-    + '<table class="data-tbl" style="width:100%;min-width:900px">' + colgroup + '<thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
+  host.innerHTML = '<div class="tbl-count">列見出しをクリックで並び替え</div>'
+    + '<table class="data-tbl" style="width:100%;min-width:880px">' + colgroup + '<thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
   host.querySelectorAll("th").forEach(th => th.addEventListener("click", () => {
     const k = th.dataset.k;
     if(k === tblSortKey){ tblSortDir = -tblSortDir; }
@@ -1382,8 +1712,13 @@ document.querySelectorAll("#mapTypeToggle button").forEach(b => b.addEventListen
   const d = b.dataset.map;
   if(d === activeDataset) return;
   activeDataset = d;
-  document.querySelectorAll("#mapTypeToggle button").forEach(x => x.classList.toggle("active", x === b));
+  document.querySelectorAll("#mapTypeToggle button").forEach(x => {
+    const on = x === b;
+    x.classList.toggle("active", on);
+    x.setAttribute("aria-selected", on ? "true" : "false");
+  });
   document.getElementById("mapTitle").textContent = DATASET_TITLE[d];
+  document.title = DATASET_TITLE[d];
   buildChips(activeDataset);
   render();
   if(mapReady){
