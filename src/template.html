@@ -511,8 +511,8 @@ records.forEach(r => {
   const m = majorOf(g, r._dataset);
   r._genre = g; r._color = m.color; r._label = m.label;
   r._visited = (r["訪問済"] === "訪問済");
-  // 総合点 = 美味しさ・量・安さ（値段）の平均。ひとつも無ければ null（未評価）
-  const rv = ["美味しさ", "量", "値段"].map(k => parseInt(r[k], 10)).filter(v => !isNaN(v));
+  // 総合点 = 美味しさ・量・安さの平均。ひとつも無ければ null（未評価）
+  const rv = ["美味しさ", "量", "安さ"].map(k => parseInt(r[k], 10)).filter(v => !isNaN(v));
   r._score = rv.length ? Math.round(rv.reduce((a, b) => a + b, 0) / rv.length * 10) / 10 : null;
   const lat = parseFloat(r["lat"]), lng = parseFloat(r["lng"]);
   r._hasCoord = !isNaN(lat) && !isNaN(lng) && r["lat"]!=="" && r["lng"]!=="";
@@ -692,7 +692,7 @@ function stars(label, v){
 }
 function ratingsLine(r){
   if(r._score === null) return '';
-  const rows = [stars("味", r["美味しさ"]), stars("量", r["量"]), stars("安", r["値段"])].filter(Boolean);
+  const rows = [stars("味", r["美味しさ"]), stars("量", r["量"]), stars("安", r["安さ"])].filter(Boolean);
   return '<div class="ratings">'
     + '<div class="rt rt-total"><span class="rl">総合</span><b>' + r._score + '</b></div>'
     + rows.join("") + '</div>';
@@ -781,7 +781,7 @@ const SCORE_DEFS = [
   {key:"score",  label:"総合点",   val:r => r._score},
   {key:"tasty",  label:"美味しさ", val:r => numOf(r["美味しさ"])},
   {key:"amount", label:"量",       val:r => numOf(r["量"])},
-  {key:"cost",   label:"安さ",     val:r => numOf(r["値段"])},
+  {key:"cost",   label:"安さ",     val:r => numOf(r["安さ"])},
 ];
 const thresholds = {};
 SCORE_DEFS.forEach(d => { thresholds[d.key] = 1; });
@@ -942,7 +942,7 @@ const TBL_COLS = [
   {k:"score",  label:"総合点", type:"num", w:"64px",  get:r => r._score !== null ? r._score : "—", val:r => r._score},
   {k:"tasty",  label:"美味しさ", type:"num", w:"72px", get:r => r["美味しさ"] || "—", val:r => numOf(r["美味しさ"])},
   {k:"amount", label:"量",     type:"num", w:"52px",  get:r => r["量"] || "—", val:r => numOf(r["量"])},
-  {k:"cost",   label:"安さ",   type:"num", w:"56px",  get:r => r["値段"] || "—", val:r => numOf(r["値段"])},
+  {k:"cost",   label:"安さ",   type:"num", w:"56px",  get:r => r["安さ"] || "—", val:r => numOf(r["安さ"])},
   {k:"感想",   label:"感想",   type:"str", w:"25%",   cls:"wrap", get:r => esc(r["感想"] || ""), val:r => r["感想"] || ""},
   {k:"備考",   label:"備考",   type:"str", w:"12%",   cls:"wrap", get:r => esc(r["備考"] || ""), val:r => r["備考"] || ""},
   {k:"map",    label:"地図",   type:"str", w:"90px",  get:r => '<a class="g" href="' + openUrl(r) + '" target="_blank" rel="noopener">Google Maps</a>', val:r => ""},
