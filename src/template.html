@@ -934,17 +934,20 @@ document.getElementById("listReopenBtn").addEventListener("click", () => setList
 
 /* ===== 表ビュー（同ページ内。絞り込み結果を表示、列見出しで並び替え） =====
    幅の配分：数値列は「4」1文字＋見出しが入る分だけに詰め、余り幅は感想・備考へ % で回す
-   （以前は数値4列に 304px を割り当てて、一番読みたい感想を 280px 固定にしていた）。 */
+   （以前は数値4列に 304px を割り当てて、一番読みたい感想を 280px 固定にしていた）。
+   店名・小分類は最長データ（13文字・11文字）を1行で収める幅がないので、切り詰めずに
+   wrap で2行に流す。狭い画面では min-width まで詰めたあと横スクロールに切り替わる。 */
 const TBL_COLS = [
-  {k:"店名",   label:"店名",   type:"str", w:"180px", get:r => esc(r["店名"]) + (r._visited ? "" : ' <span class="unv">未訪問</span>'), val:r => r["店名"]},
+  {k:"店名",   label:"店名",   type:"str", w:"150px", cls:"wrap", get:r => esc(r["店名"]) + (r._visited ? "" : ' <span class="unv">未訪問</span>'), val:r => r["店名"]},
   {k:"大分類", label:"大分類", type:"str", w:"132px", get:r => '<span class="maj" style="' + colorVars(r._color) + '">' + esc(r._genre) + '</span>', val:r => r._genre},
+  {k:"カテゴリ", label:"小分類", type:"str", w:"140px", cls:"wrap", get:r => esc(r["カテゴリ"] || "—"), val:r => r["カテゴリ"] || ""},
   {k:"地域",   label:"地域",   type:"rank", w:"76px", get:r => esc(r["地域"]), val:r => areaRank(r["地域"])},
   {k:"score",  label:"総合点", type:"num", w:"64px",  get:r => r._score !== null ? r._score : "—", val:r => r._score},
   {k:"tasty",  label:"美味しさ", type:"num", w:"72px", get:r => r["美味しさ"] || "—", val:r => numOf(r["美味しさ"])},
   {k:"amount", label:"量",     type:"num", w:"52px",  get:r => r["量"] || "—", val:r => numOf(r["量"])},
   {k:"cost",   label:"安さ",   type:"num", w:"56px",  get:r => r["安さ"] || "—", val:r => numOf(r["安さ"])},
   {k:"感想",   label:"感想",   type:"str", w:"25%",   cls:"wrap", get:r => esc(r["感想"] || ""), val:r => r["感想"] || ""},
-  {k:"備考",   label:"備考",   type:"str", w:"12%",   cls:"wrap", get:r => esc(r["備考"] || ""), val:r => r["備考"] || ""},
+  {k:"備考",   label:"備考",   type:"str", w:"9%",    cls:"wrap", get:r => esc(r["備考"] || ""), val:r => r["備考"] || ""},
   {k:"map",    label:"地図",   type:"str", w:"90px",  get:r => '<a class="g" href="' + openUrl(r) + '" target="_blank" rel="noopener">Google Maps</a>', val:r => ""},
 ];
 let tblSortKey = "score", tblSortDir = -1;
@@ -967,7 +970,7 @@ function renderTable(){
   }).join("") + "</tr>";
   const tbody = rows.map(r => "<tr>" + TBL_COLS.map(c => '<td class="' + tdClass(c) + '">' + c.get(r) + "</td>").join("") + "</tr>").join("");
   host.innerHTML = '<div class="tbl-count">列見出しをクリックで並び替え</div>'
-    + '<table class="data-tbl" style="width:100%;min-width:880px">' + colgroup + '<thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
+    + '<table class="data-tbl" style="width:100%;min-width:1040px">' + colgroup + '<thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
   host.querySelectorAll("th").forEach(th => th.addEventListener("click", () => {
     const k = th.dataset.k;
     if(k === tblSortKey){ tblSortDir = -tblSortDir; }
