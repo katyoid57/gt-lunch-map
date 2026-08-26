@@ -1095,7 +1095,7 @@ LU046,"よし田","焼き鳥","肉","一番町","東京都千代田区一番町2
 LU047,"ふくの鳥 市ヶ谷外堀通り店","焼き鳥","肉","市谷田町","東京都新宿区市谷田町1-1","染谷ビル B1F",35.692531,139.735134,"訪問済","3","3","3","この日は店長がピリついてた。もう一度挑戦しますｂ","","katyoid"
 LU048,"しょう吉","定食","和食・定食","市谷田町","東京都新宿区市谷田町1-2","松下ビル B1F",35.692672,139.735214,"訪問済","3","3","3","1人で行くと相席の可能性大","喫煙可","katyoid"
 LU049,"豚基地","二郎系ラーメン","麺類","六番町","東京都千代田区六番町4-11","朝日六番町マンション 1F",35.688955,139.735358,"訪問済","3","4","3","スープは乳化、チャーシューは噛み応えタイプ","","katyoid"
-LU050,"らいむらいと","ステーキ・ハンバーグ","肉","九段南","東京都千代田区九段南3-4-8","パディホームズ一口坂 1F・B1F",35.691957,139.741209,"訪問済","4","4","2","チーズハンバーグだと少し脂っこいかもしれない。","食べログ ステーキ・鉄板焼き EAST 百名店（2024・2025）","katyoid"
+LU050,"らいむらいと","ハンバーグ","肉","九段南","東京都千代田区九段南3-4-8","パディホームズ一口坂 1F・B1F",35.691957,139.741209,"訪問済","4","4","2","チーズハンバーグだと少し脂っこいかもしれない。","食べログ ステーキ・鉄板焼き EAST 百名店（2024・2025）","katyoid"
 </script>
 <script id="data-izakaya" type="text/plain">
 ﻿店舗ID,店名,カテゴリ,大分類,地域,住所,場所,lat,lng,訪問済,美味しさ,量,安さ,感想,備考,更新者
@@ -1665,22 +1665,28 @@ document.getElementById("listCollapseBtn").addEventListener("click", () => setLi
 document.getElementById("listReopenBtn").addEventListener("click", () => setList(false));
 
 /* ===== 表ビュー（同ページ内。絞り込み結果を表示、列見出しで並び替え） =====
-   幅の配分：数値列は「4」1文字＋見出しが入る分だけに詰め、余り幅は感想・備考へ % で回す
-   （以前は数値4列に 304px を割り当てて、一番読みたい感想を 280px 固定にしていた）。
-   店名・小分類は最長データ（13文字・11文字）を1行で収める幅がないので、切り詰めずに
-   wrap で2行に流す。狭い画面では min-width まで詰めたあと横スクロールに切り替わる。 */
+   幅の配分：感想以外は「実データの最長＋左右padding」ちょうどの px を与え、
+   余りは幅指定なしの感想（＝table-layout:fixed で余りを受け取る唯一の列）に集める。
+   ・全列に幅を指定すると、fixed レイアウトは余りを全列へ比例配分するので、
+     画面が広いほど地域や量まで間延びする（1920px 画面で地域が 120px になっていた）。
+   ・それでも広い画面では感想が伸びすぎるため、表側に max-width:1440px で上限を置き、
+     そこから先は表を伸ばさず右の余白にする。
+   幅の根拠（13px フォント、padding 8px×2 + 罫線 1px）：
+     店名 163px / 大分類 133px（チップの内側余白込み）/ 小分類 143px / 地域 52px /
+     備考 345px（2行に折り返す前提で 220px）/ 地図「Google Maps」92px。
+     数値3列は中身が1文字なので、見出し文字＋並び替えの▼が入る幅が下限になる。 */
 const TBL_COLS = [
-  {k:"店名",   label:"店名",   type:"str", w:"150px", cls:"wrap", get:r => esc(r["店名"]) + (r._visited ? "" : ' <span class="unv">未訪問</span>'), val:r => r["店名"]},
-  {k:"大分類", label:"大分類", type:"str", w:"132px", get:r => '<span class="maj" style="' + colorVars(r._color) + '">' + esc(r._genre) + '</span>', val:r => r._genre},
-  {k:"カテゴリ", label:"小分類", type:"str", w:"140px", cls:"wrap", get:r => esc(r["カテゴリ"] || "—"), val:r => r["カテゴリ"] || ""},
-  {k:"地域",   label:"地域",   type:"rank", w:"76px", get:r => esc(r["地域"]), val:r => areaRank(r["地域"])},
-  {k:"score",  label:"総合点", type:"num", w:"64px",  get:r => r._score !== null ? r._score : "—", val:r => r._score},
-  {k:"tasty",  label:"美味しさ", type:"num", w:"72px", get:r => r["美味しさ"] || "—", val:r => numOf(r["美味しさ"])},
+  {k:"店名",   label:"店名",   type:"str", w:"180px", get:r => esc(r["店名"]) + (r._visited ? "" : ' <span class="unv">未訪問</span>'), val:r => r["店名"]},
+  {k:"大分類", label:"大分類", type:"str", w:"150px", get:r => '<span class="maj" style="' + colorVars(r._color) + '">' + esc(r._genre) + '</span>', val:r => r._genre},
+  {k:"カテゴリ", label:"小分類", type:"str", w:"160px", get:r => esc(r["カテゴリ"] || "—"), val:r => r["カテゴリ"] || ""},
+  {k:"地域",   label:"地域",   type:"rank", w:"72px", get:r => esc(r["地域"]), val:r => areaRank(r["地域"])},
+  {k:"score",  label:"総合点", type:"num", w:"72px",  get:r => r._score !== null ? r._score : "—", val:r => r._score},
+  {k:"tasty",  label:"美味しさ", type:"num", w:"84px", get:r => r["美味しさ"] || "—", val:r => numOf(r["美味しさ"])},
   {k:"amount", label:"量",     type:"num", w:"52px",  get:r => r["量"] || "—", val:r => numOf(r["量"])},
-  {k:"cost",   label:"安さ",   type:"num", w:"56px",  get:r => r["安さ"] || "—", val:r => numOf(r["安さ"])},
-  {k:"感想",   label:"感想",   type:"str", w:"25%",   cls:"wrap", get:r => esc(r["感想"] || ""), val:r => r["感想"] || ""},
-  {k:"備考",   label:"備考",   type:"str", w:"9%",    cls:"wrap", get:r => esc(r["備考"] || ""), val:r => r["備考"] || ""},
-  {k:"map",    label:"地図",   type:"str", w:"90px",  get:r => '<a class="g" href="' + openUrl(r) + '" target="_blank" rel="noopener">Google Maps</a>', val:r => ""},
+  {k:"cost",   label:"安さ",   type:"num", w:"60px",  get:r => r["安さ"] || "—", val:r => numOf(r["安さ"])},
+  {k:"感想",   label:"感想",   type:"str",             cls:"wrap", get:r => esc(r["感想"] || ""), val:r => r["感想"] || ""},
+  {k:"備考",   label:"備考",   type:"str", w:"220px", cls:"wrap", get:r => esc(r["備考"] || ""), val:r => r["備考"] || ""},
+  {k:"map",    label:"地図",   type:"str", w:"96px",  get:r => '<a class="g" href="' + openUrl(r) + '" target="_blank" rel="noopener">Google Maps</a>', val:r => ""},
 ];
 let tblSortKey = "score", tblSortDir = -1;
 function renderTable(){
@@ -1702,7 +1708,7 @@ function renderTable(){
   }).join("") + "</tr>";
   const tbody = rows.map(r => "<tr>" + TBL_COLS.map(c => '<td class="' + tdClass(c) + '">' + c.get(r) + "</td>").join("") + "</tr>").join("");
   host.innerHTML = '<div class="tbl-count">列見出しをクリックで並び替え</div>'
-    + '<table class="data-tbl" style="width:100%;min-width:1040px">' + colgroup + '<thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
+    + '<table class="data-tbl" style="width:100%;max-width:1440px;min-width:1360px">' + colgroup + '<thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
   host.querySelectorAll("th").forEach(th => th.addEventListener("click", () => {
     const k = th.dataset.k;
     if(k === tblSortKey){ tblSortDir = -tblSortDir; }
