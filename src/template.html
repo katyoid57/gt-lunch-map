@@ -713,19 +713,57 @@ function _setHi(pred){
     pin.classList.add(pred(r) ? "hi" : "dim");
   });
 }
+/* 隣り合う丁目は境界を共有している。リングごとに L.polygon で描くと共有辺を2回なぞるため、
+   破線の位相が2本でずれて実線に見えてしまう（麹町は共有辺が40本あり全域で潰れていた。
+   九段南は3本しかないので目立たなかった）。そこで辺の集合にばらし、同じ辺は1本だけ残す。
+   ばらしたままだと線分ごとに破線が切れるので、分岐点（3本以上が集まる角）まで繋ぎ直す。 */
+function _outlineLines(polys){
+  const key = p => p[0] + "," + p[1];
+  const ek  = (a, b) => a < b ? a + "|" + b : b + "|" + a;
+  const pt = new Map(), adj = new Map(), seen = new Set();
+  polys.forEach(ring => {
+    for(let i = 0; i < ring.length - 1; i++){
+      const ka = key(ring[i]), kb = key(ring[i + 1]);
+      if(ka === kb || seen.has(ek(ka, kb))) continue;   /* 2度目に出てきた共有辺は捨てる */
+      seen.add(ek(ka, kb));
+      pt.set(ka, ring[i]); pt.set(kb, ring[i + 1]);
+      if(!adj.has(ka)) adj.set(ka, []);
+      if(!adj.has(kb)) adj.set(kb, []);
+      adj.get(ka).push(kb); adj.get(kb).push(ka);
+    }
+  });
+  const used = new Set(), lines = [];
+  adj.forEach((nbrs, start) => nbrs.forEach(first => {
+    if(used.has(ek(start, first))) return;
+    const line = [pt.get(start)];
+    let cur = start, next = first;
+    while(next && !used.has(ek(cur, next))){
+      used.add(ek(cur, next));
+      line.push(pt.get(next));
+      const rest = (adj.get(next) || []).filter(k => !used.has(ek(next, k)));
+      cur = next;
+      next = rest.length === 1 ? rest[0] : null;        /* 分岐点では止める */
+    }
+    if(line.length > 1) lines.push(line);
+  }));
+  return lines;
+}
 function _showOutline(area){
   _clearOutline();
   const polys = (typeof AREA_POLYGONS !== "undefined") && AREA_POLYGONS[area];
   if(!polys || !polys.length) return;
   /* エリア枠は「今どこを見ているか」を一目で示したいので、無彩色ではなく色を付ける（--on-map-mark）。
      白い縁取り(casing)を下に敷いて淡色タイルの地図線から浮かせ、破線にして境界だと分かるようにする。
-     色は赤（--on-map-mark）。大分類の赤系との数値上の近さを許容している理由はトークンの定義側に書いた。 */
+     色は赤（--on-map-mark）。大分類の赤系との数値上の近さを許容している理由はトークンの定義側に書いた。
+     塗りは面が要るので L.polygon のまま、線は共有辺を除いた折れ線で描く。 */
   const rings = polys.map(ring => [ring]);
-  const casing = L.polygon(rings, {color:"#fff", weight:8, opacity:.95,
+  const lines = _outlineLines(polys);
+  const fill = L.polygon(rings, {stroke:false,
     fill:true, fillColor:MARK, fillOpacity:0.09, interactive:false});
-  const edge = L.polygon(rings, {color:MARK, weight:2.5, opacity:1, dashArray:"7 4",
-    fill:false, interactive:false});
-  _outline = L.layerGroup([casing, edge]).addTo(map);
+  const casing = L.polyline(lines, {color:"#fff", weight:8, opacity:.95, interactive:false});
+  const edge = L.polyline(lines, {color:MARK, weight:2.5, opacity:1, dashArray:"7 4",
+    interactive:false});
+  _outline = L.layerGroup([fill, casing, edge]).addTo(map);
 }
 /* hover だけだとキーボード・タッチで機能が存在しないことになるので、focus でも同じ強調を出す */
 function bindHi(label, cb, onEnter, onLeave){
