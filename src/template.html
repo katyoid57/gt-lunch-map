@@ -514,10 +514,10 @@ const MAJORS_BY_DS = {
 function majorOf(g, ds){ return (MAJORS_BY_DS[ds] || []).find(m => m.g === g) || OTHER; }
 
 /* ===== 地域（丁目）の並び順 =====
-   CSV の登場順だと意味のない順になるので明示的に持つ。北の市谷田町から九段へ下り、
+   CSV の登場順だと意味のない順になるので明示的に持つ。市谷八幡町・市谷田町から九段へ下り、
    番町を六→一の順に、最後に麹町。三番町は現在データが無いが、増えたときに正しい位置に入るよう並べてある。
    この配列に無い地域は末尾に回す（新しい丁目を CSV に足しても消えない）。 */
-const AREA_ORDER = ["市谷田町", "九段北", "九段南", "六番町", "五番町", "四番町", "三番町", "二番町", "一番町", "麹町"];
+const AREA_ORDER = ["市谷八幡町", "市谷田町", "九段北", "九段南", "六番町", "五番町", "四番町", "三番町", "二番町", "一番町", "麹町"];
 function areaRank(a){ const i = AREA_ORDER.indexOf(a); return i < 0 ? AREA_ORDER.length : i; }
 function byArea(a, b){ return (areaRank(a) - areaRank(b)) || a.localeCompare(b, "ja"); }
 /* 色は CSS 変数で流す（.pin / .genre-badge / .maj が同じ仕組みを共有）。文字色は白で固定 */
